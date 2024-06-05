@@ -12,10 +12,10 @@ class GravityCompensation:
         self.dynamics = ca.Function('dyn', [model.x, model.u], [model.f_expl[model.nq:]])
         self.opti.minimize(1)
         self.opti.subject_to(self.dynamics(self.x, self.u) == 0)    
-        self.opti.subject_to(self.opti.bounded(self.model.u_min, self.u, self.model.u_max))
-        opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes', 'ipopt.linear_solver': 'ma57'}
+        #self.opti.subject_to(self.opti.bounded(self.model.u_min, self.u, self.model.u_max))
+        opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.sb': 'yes'}
         self.opti.solver('ipopt', opts)
-
+        
     def solve(self, x):
         self.opti.set_value(self.x, x)
         sol = self.opti.solve()

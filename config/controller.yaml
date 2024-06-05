@@ -4,8 +4,8 @@ n_steps: 200              # number of time steps in each test
 cpu_num: 20
 regenerate: true          # regenerate data
 
-nlp_max_iter: 100
-qp_max_iter: 100
+nlp_max_iter: 150
+qp_max_iter: 150
 solver_mode: 'BALANCE'    # HPIPM mode, can be --> 'BALANCE', 'ROBUST', 'SPEED', 'SPEED_ABS'
 alpha: 2
 conv_tol: 1e-3            # convergence tolerance for the task
@@ -35,6 +35,18 @@ htwa:
 
 # Receding Controller
 receding:
+  dt: 5e-3
+  T: 0.175
+  ws_r: 1e4
+  ws_t: 1e4
+
+parallel:
+  dt: 5e-3
+  T: 0.175
+  ws_r: 1e4
+  ws_t: 1e4
+
+parallel2:
   dt: 5e-3
   T: 0.175
   ws_r: 1e4

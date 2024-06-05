@@ -84,6 +84,10 @@ class Parameters:
             self.ws_t = float(controller[cont_type]['ws_t'])
             if cont_type == 'receding':
                 self.ws_r = float(controller[cont_type]['ws_r'])
+            if cont_type == 'parallel2':
+                self.ws_r = float(controller[cont_type]['ws_r'])
+            if cont_type == 'parallel':
+                self.ws_r = float(controller[cont_type]['ws_r'])
 
         if cont_type == 'abort':
             self.q_dot_gain = float(controller[cont_type]['q_dot_gain'])

@@ -70,7 +70,7 @@ class AbstractModel:
         pass
 
     def checkStateConstraints(self, x):
-        return np.all(np.logical_and(x >= self.x_min, x <= self.x_max))
+        return np.all(np.logical_and(x >= self.x_min-0*1e-7, x <= self.x_max+0*1e-7))
 
     def checkControlConstraints(self, u):
         return np.all(np.logical_and(u >= self.u_min, u <= self.u_max))

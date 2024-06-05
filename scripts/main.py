@@ -18,10 +18,37 @@ def convergenceCriteria(x, mask=None):
 def init_guess(q0):
     x0 = np.zeros((model.nx,))
     x0[:model.nq] = q0
-    # u0 = gc.solve(x0)
-    flag = controller.initialize(x0)
+    u0 = gc.solve(x0)
+    flag = controller.initialize(x0,u0)
     return controller.getGuess(), flag
 
+
+# def simulate_mpc(p):
+#     x0 = np.zeros((model.nx,))
+#     x0[:model.nq] = x0_vec[p]
+
+#     x_sim = np.empty((conf.n_steps + 1, model.nx)) * np.nan
+#     u = np.empty((conf.n_steps, model.nu)) * np.nan
+#     x_sim[0] = x0
+
+#     controller.setGuess(x_guess_vec[p], u_guess_vec[p])
+#     controller.fails = 0
+#     stats = []
+#     convergence = 0
+#     k = 0
+#     for k in range(conf.n_steps):
+#         u[k] = controller.step(x_sim[k])
+#         stats.append(controller.getTime())
+#         x_sim[k + 1] = simulator.simulate(x_sim[k], u[k])
+#         # Check if the next state is inside the state bounds
+#         if not model.checkStateConstraints(x_sim[k + 1]):
+#             break
+#         # Check convergence --> norm of diff btw x_sim and x_ref (only for first joint)
+#         if convergenceCriteria(x_sim[k + 1], np.array([1, 0, 0, 1, 0, 0])):
+#             convergence = 1
+#             break
+#     x_v = controller.getLastViableState()
+#     return k, convergence, x_sim, stats, x_v
 
 def simulate_mpc(p):
     x0 = np.zeros((model.nx,))
@@ -36,16 +63,22 @@ def simulate_mpc(p):
     stats = []
     convergence = 0
     k = 0
+    
+    
     for k in range(conf.n_steps):
+        #if p==8: print(controller.hor)
         u[k] = controller.step(x_sim[k])
         stats.append(controller.getTime())
         x_sim[k + 1] = simulator.simulate(x_sim[k], u[k])
         # Check if the next state is inside the state bounds
+       
         if not model.checkStateConstraints(x_sim[k + 1]):
+            print("Violated constraint")
             break
         # Check convergence --> norm of diff btw x_sim and x_ref (only for first joint)
         if convergenceCriteria(x_sim[k + 1], np.array([1, 0, 0, 1, 0, 0])):
             convergence = 1
+            print(f"{p}:{x0}=SUCCESS")
             break
     x_v = controller.getLastViableState()
     return k, convergence, x_sim, stats, x_v
@@ -61,6 +94,8 @@ if __name__ == '__main__':
                              'stwa': 'STWAController',
                              'htwa': 'HTWAController',
                              'receding': 'RecedingController',
+                             'parallel': 'ParallelController',
+                             'parallel2': 'ParallelWithCheck',
                              'abort': 'SafeBackupController'}
 
     if args['init_conditions']:
@@ -159,8 +194,11 @@ if __name__ == '__main__':
         x_guess_vec = np.load(data_name + 'x_guess.npy')
         u_guess_vec = np.load(data_name + 'u_guess.npy')
         res = []
+        progress_bar = tqdm(total=conf.test_num, desc='Running on %d' %(conf.test_num))
         for i in range(conf.test_num):
             res.append(simulate_mpc(i))
+            progress_bar.update(1)
+        progress_bar.close()
         steps, conv_vec, x_sim_vec, t_stats, x_viable = zip(*res)
         steps = np.array(steps)
         conv_vec = np.array(conv_vec)
