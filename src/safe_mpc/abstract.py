@@ -215,9 +215,10 @@ class AbstractController:
         # Additional settings, in general is an empty method
         self.additionalSetting()
 
-        gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
-        self.ocp.code_export_directory = gen_name
-        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=gen_name + '.json', build=self.params.regenerate)
+        self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
+        self.ocp.code_export_directory = self.gen_name
+        #self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=gen_name + '.json', build=self.params.regenerate)
+        self.reinit_solver()
 
         # Initialize guess
         self.fails = 0
@@ -234,6 +235,8 @@ class AbstractController:
         # Time stats
         self.time_fields = ['time_lin', 'time_sim', 'time_qp', 'time_qp_solver_call',
                             'time_glob', 'time_reg', 'time_tot']
+    def reinit_solver(self):
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
 
     def additionalSetting(self):
         pass

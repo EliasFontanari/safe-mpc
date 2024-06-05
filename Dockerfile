@@ -72,8 +72,9 @@ CMD ["tail", "-f", "/dev/null"]
 
 
 # build with  docker build --progress=plain -t mpc-dock .
-# start it with docker run  -it --name mycontainername --mount type=bind,source="$(pwd)",target=/app/devel/safe-mpc mpc-dock bash
-# to open other shells use docker exec -it myc bash
+# start it with docker run  -it --name mycontainername --mount type=bind,source="$(pwd)",target=/app/devel/safe-mpc mpc-dock bash,
+# sicne pwd used the command has to be lauched inside the safe-mpc folder
+# to open other shells use docker exec -it mycontainername bash
 
 
 

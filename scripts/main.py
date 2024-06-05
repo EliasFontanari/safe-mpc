@@ -7,6 +7,7 @@ import safe_mpc.controller as controllers
 from safe_mpc.parser import Parameters, parse_args
 from safe_mpc.abstract import SimDynamics
 from safe_mpc.gravity_compensation import GravityCompensation
+from acados_template import AcadosOcpSolver
 
 
 def convergenceCriteria(x, mask=None):
@@ -18,8 +19,8 @@ def convergenceCriteria(x, mask=None):
 def init_guess(q0):
     x0 = np.zeros((model.nx,))
     x0[:model.nq] = q0
-    u0 = gc.solve(x0)
-    flag = controller.initialize(x0,u0)
+    #u0 = gc.solve(x0)
+    flag = controller.initialize(x0)
     return controller.getGuess(), flag
 
 
@@ -149,6 +150,8 @@ if __name__ == '__main__':
                 progress_bar.update(1)
             else:
                 failures += 1
+            if failures % 20 == 0:
+                controller.reinit_solver()
 
         progress_bar.close()
         np.save(conf.DATA_DIR + f'x_init_{conf.alpha}.npy', np.asarray(x_init_vec))
