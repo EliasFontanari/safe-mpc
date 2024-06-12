@@ -66,11 +66,13 @@ class AbstractModel:
         self.nn_model = None
         self.nn_func = None
 
+        self.state_tol = 1e-4
+
     def addDynamicsModel(self, params):
         pass
 
     def checkStateConstraints(self, x):
-        return np.all(np.logical_and(x >= self.x_min-0*1e-7, x <= self.x_max+0*1e-7))
+        return np.all(np.logical_and(x >= self.x_min-self.state_tol, x <= self.x_max+self.state_tol))
 
     def checkControlConstraints(self, u):
         return np.all(np.logical_and(u >= self.u_min, u <= self.u_max))
@@ -210,6 +212,7 @@ class AbstractController:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
+        #self.ocp.solver_options.nlp_solver_tol_eq = 1e-9
         # self.ocp.solver_options.levenberg_marquardt = 1e2
 
         # Additional settings, in general is an empty method

@@ -67,19 +67,27 @@ def simulate_mpc(p):
     
     
     for k in range(conf.n_steps):
-        #if p==8: print(controller.hor)
+        if p==90 and k==42:
+            pass
         u[k] = controller.step(x_sim[k])
         stats.append(controller.getTime())
         x_sim[k + 1] = simulator.simulate(x_sim[k], u[k])
         # Check if the next state is inside the state bounds
-       
         if not model.checkStateConstraints(x_sim[k + 1]):
-            print("Violated constraint")
+            print(f"{p}:{x0}=> Violated constraint")
+            if not(np.isnan(u[k][0])):
+                mask = np.ones(model.nx)
+                violation_max = (x_sim[k+1]>controller.model.x_max)
+                violation_min = (x_sim[k+1]<controller.model.x_min)
+                for i in range(violation_max.shape[0]):
+                    if violation_max[i]: violations.append([x_sim[k+1][i]-controller.model.x_max[i],p,k,controller.safe_hor])
+                    print(u[k])
+                    if violation_min[i]: violations.append([-x_sim[k+1][i]+controller.model.x_min[i],p,k,controller.safe_hor])
             break
         # Check convergence --> norm of diff btw x_sim and x_ref (only for first joint)
         if convergenceCriteria(x_sim[k + 1], np.array([1, 0, 0, 1, 0, 0])):
             convergence = 1
-            print(f"{p}:{x0}=SUCCESS")
+            print(f"{p}:{x0}=> SUCCESS")
             break
     x_v = controller.getLastViableState()
     return k, convergence, x_sim, stats, x_v
@@ -193,6 +201,7 @@ if __name__ == '__main__':
         print('Init guess success: %d over %d' % (sum(successes), conf.test_num))
 
     elif args['rti']:
+        violations=[]
         x0_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
         x_guess_vec = np.load(data_name + 'x_guess.npy')
         u_guess_vec = np.load(data_name + 'u_guess.npy')
@@ -224,6 +233,12 @@ if __name__ == '__main__':
                          'steps': steps,
                          'idx_abort': idx_abort,
                          'x_viable': np.asarray(x_viable)}, f)
+        # Save constraint violations
+        viol_dir=conf.DATA_DIR+ 'constraint_violations/'
+        if not os.path.exists(viol_dir):
+            os.makedirs(viol_dir)
+        np.savetxt(viol_dir+args['controller']+f'{controller.model.state_tol}.txt', violations)
+    
 
     elif args['controller'] == 'abort' and args['abort'] in ['stwa', 'htwa', 'receding']:
         # Increase time horizon

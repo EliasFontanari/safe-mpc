@@ -7,6 +7,15 @@ class NaiveController(AbstractController):
     def __init__(self, simulator):
         super().__init__(simulator)
 
+    def checkStateConstraintsController(self, x):
+        return np.all(np.logical_and(x >= self.model.x_min, x <= self.model.x_max))
+    
+    def checkControlConstraintsController(self, u):
+        return np.all(np.logical_and(u >= self.model.u_min, u <= self.model.u_max))
+
+    def checkRunningConstraintsController(self, x, u):
+        return self.checkStateConstraintsController(x) and self.checkControlConstraintsController(u)
+
     def checkGuess(self):
         return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
                self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp)
@@ -85,13 +94,15 @@ class RecedingController(STWAController):
     def __init__(self, simulator):
         super().__init__(simulator)
         self.r = self.N
+        self.alternative_x_guess = self.x_guess
+        self.alternative_u_guess = self.u_guess 
 
     def additionalSetting(self):
         # Terminal constraint before, since it construct the nn model
         self.terminalConstraint()
         self.runningConstraint()
 
-    def solve(self, x0,constr_nodes=None):
+    def solve(self, x0,constr_nodes=None,alternative_guess=None):
         # Reset current iterate
         self.ocp_solver.reset()
 
@@ -103,11 +114,24 @@ class RecedingController(STWAController):
         y_ref[:self.model.nx] = self.x_ref
         W = lin.block_diag(self.Q, self.R)
 
-        for i in range(self.N):
-            self.ocp_solver.set(i, 'x', self.x_guess[i])
-            self.ocp_solver.set(i, 'u', self.u_guess[i])
-            self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
-            self.ocp_solver.cost_set(i, 'W', W, api='new')
+        if alternative_guess == None:
+            for i in range(self.N):
+                self.ocp_solver.set(i, 'x', self.x_guess[i])
+                self.ocp_solver.set(i, 'u', self.u_guess[i])
+                self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
+                self.ocp_solver.cost_set(i, 'W', W, api='new')
+            self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
+            self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+            self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
+        else:
+            for i in range(self.N):
+                self.ocp_solver.set(i, 'x', self.alternative_x_guess[i])
+                self.ocp_solver.set(i, 'u', self.alternative_u_guess[i])
+                self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
+                self.ocp_solver.cost_set(i, 'W', W, api='new')
+            self.ocp_solver.set(self.N, 'x', self.alternative_x_guess[-1])
+            self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+            self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
 
         if constr_nodes != None:
             for i in range(1,self.N+1):
@@ -117,9 +141,7 @@ class RecedingController(STWAController):
         
 
         
-        self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
-        self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
-        self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
+        
 
         # Solve the OCP
         status = self.ocp_solver.solve()
@@ -149,7 +171,7 @@ class RecedingController(STWAController):
             if self.model.checkSafeConstraints(self.x_temp[i]):
                 r_new = i - 1
 
-        if status == 0 and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and r_new > 0:
+        if status == 0 and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and r_new > 0:
             self.fails = 0
             self.r = r_new
         else:
@@ -166,6 +188,8 @@ class ParallelController(RecedingController):
         super().__init__(simulator)
         self.n_prob =  self.N - 1
         self.safe_hor = self.N
+        self.alternative_x_guess = self.x_guess
+        self.alternative_u_guess = self.u_guess
         #self.ocp.cost.zl_e = np.zeros((1,))
         #self.ocp_solver.cost_set(self.N, "zl", np.zeros((1,)))
 
@@ -174,7 +198,13 @@ class ParallelController(RecedingController):
                self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp) and \
                self.model.checkSafeConstraints(self.x_temp[-1])
 
-
+    def check_safe_n(self):
+        r=0
+        for i in range(1, self.N + 1):
+            if self.model.checkSafeConstraints(self.x_temp[i]):
+                r = i
+        return r
+    
     def constrain_n(self,n_constr):
         for i in range(1, self.N+1):
             self.ocp_solver.cost_set(i, "zl", np.zeros((1,)))
@@ -187,16 +217,31 @@ class ParallelController(RecedingController):
         success = False
 
         self.constrain_n(n_constr)
-        status = self.solve(x,[n_constr])
+        status = self.solve(x,[n_constr],alternative_guess=None)
+        checked_r= self.check_safe_n()
 
-
-        if self.model.checkSafeConstraints(self.x_temp[n_constr]):
+        if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r>1:
+            constr_ver = n_constr if check else 0
+            n_step_safe = max(constr_ver,checked_r)
+            # Comment this line to use parallel with check
+            n_step_safe = constr_ver
             success = True
 
-        if success and status == 0 and self.model.checkRunningConstraints(self.x_temp, self.u_temp)  and n_constr>=self.safe_hor:
-            self.fails = 0
-            self.safe_hor = n_constr
+        if success and status == 0 and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and n_step_safe>=self.safe_hor:
+            self.fails = 0 
+            self.safe_hor = n_step_safe
+            
+            for i in range(self.N):
+                self.alternative_x_guess[i] = self.ocp_solver.get(i, "x")
+                self.alternative_u_guess[i] = self.ocp_solver.get(i, "u")
+            self.alternative_x_guess[-1] = self.ocp_solver.get(self.N, "x")
 
+            # if  n_step_safe>=self.safe_hor:
+            #     self.fails = 0 
+            #     self.safe_hor = n_step_safe
+            # else:
+            #     self.fails +=1
+        
         else:
             self.fails +=1
             success = False
