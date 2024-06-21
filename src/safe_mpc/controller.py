@@ -6,10 +6,12 @@ from .abstract import AbstractController
 class NaiveController(AbstractController):
     def __init__(self, simulator):
         super().__init__(simulator)
+        self.tol_array= np.ones(self.x_guess.shape)*5e-4
+        self.tol_array[0] = 0
 
     def checkStateConstraintsController(self, x):
-        return np.all(np.logical_and(x >= self.model.x_min, x <= self.model.x_max))
-    
+        return np.all(np.logical_and(x >= self.model.x_min-self.tol_array, x <= self.model.x_max+self.tol_array))
+
     def checkControlConstraintsController(self, u):
         return np.all(np.logical_and(u >= self.model.u_min, u <= self.model.u_max))
 
@@ -95,7 +97,7 @@ class RecedingController(STWAController):
         super().__init__(simulator)
         self.r = self.N
         self.alternative_x_guess = self.x_guess
-        self.alternative_u_guess = self.u_guess 
+        self.alternative_u_guess = self.u_guess
 
     def additionalSetting(self):
         # Terminal constraint before, since it construct the nn model
@@ -137,11 +139,7 @@ class RecedingController(STWAController):
             for i in range(1,self.N+1):
                 if np.all(np.array(constr_nodes) != i):
                     self.ocp_solver.set(i, 'sl', 1e4)
-                    self.ocp_solver.set(i, 'su', 1e4) 
-        
-
-        
-        
+                    self.ocp_solver.set(i, 'su', 1e4)
 
         # Solve the OCP
         status = self.ocp_solver.solve()
@@ -204,7 +202,7 @@ class ParallelController(RecedingController):
             if self.model.checkSafeConstraints(self.x_temp[i]):
                 r = i
         return r
-    
+
     def constrain_n(self,n_constr):
         for i in range(1, self.N+1):
             self.ocp_solver.cost_set(i, "zl", np.zeros((1,)))
@@ -220,37 +218,46 @@ class ParallelController(RecedingController):
         status = self.solve(x,[n_constr],alternative_guess=None)
         checked_r= self.check_safe_n()
 
-        if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r>1:
+        if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r>1 and status==0:
             constr_ver = n_constr if check else 0
             n_step_safe = max(constr_ver,checked_r)
-            # Comment this line to use parallel with check
-            n_step_safe = constr_ver
+            # Uncomment this line to use parallel without check
+            #n_step_safe = constr_ver
             success = True
-
-        if success and status == 0 and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and n_step_safe>=self.safe_hor:
-            self.fails = 0 
-            self.safe_hor = n_step_safe
-            
             for i in range(self.N):
                 self.alternative_x_guess[i] = self.ocp_solver.get(i, "x")
                 self.alternative_u_guess[i] = self.ocp_solver.get(i, "u")
             self.alternative_x_guess[-1] = self.ocp_solver.get(self.N, "x")
 
+        if success and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and n_step_safe>=self.safe_hor:
+            self.fails = 0
+            self.safe_hor = n_step_safe
+
+            # for i in range(self.N):
+            #     self.alternative_x_guess[i] = self.ocp_solver.get(i, "x")
+            #     self.alternative_u_guess[i] = self.ocp_solver.get(i, "u")
+            # self.alternative_x_guess[-1] = self.ocp_solver.get(self.N, "x")
+
             # if  n_step_safe>=self.safe_hor:
-            #     self.fails = 0 
+            #     self.fails = 0
             #     self.safe_hor = n_step_safe
             # else:
             #     self.fails +=1
-        
+
         else:
             self.fails +=1
             success = False
 
         return success
-    
+
     def step(self,x):
         i = self.N
         failed = True
+        self.alternative_x_guess = np.roll(self.alternative_x_guess, -1, axis=0)
+        self.alternative_u_guess = np.roll(self.alternative_u_guess, -1, axis=0)
+        # Copy the last values
+        self.alternative_x_guess[-1] = np.copy(self.alternative_x_guess[-2])
+        self.alternative_u_guess[-1] = np.copy(self.alternative_u_guess[-2])
         while (i > (self.N-self.n_prob)) and (failed:=not(self.sing_step(x,i))):
             i-=1
             #print(i)
@@ -304,7 +311,7 @@ class ParallelWithCheck(RecedingController):
         # Solve the OCP
 
         self.constrain_n(n_constr)
-        status = self.solve(x)
+        status = self.solve(x,[n_constr],alternative_guess=None)
         r = self.check_r()
 
         if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or r > 0:
@@ -339,7 +346,7 @@ class ParallelWithCheck(RecedingController):
         #r = int(np.argmax(results))+1
         if 1 < r  and r > self.safe_hor:
             self.constrain_n(r_indx+1)
-            status=self.solve(x) 
+            status=self.solve(x)
             status+=not(self.model.checkSafeConstraints(self.x_temp[r]))
             if status==1:
                 pass
@@ -350,9 +357,9 @@ class ParallelWithCheck(RecedingController):
             print("NOT SOLVED")
             return None
         else:
-            self.fails += 1  
+            self.fails += 1
         self.safe_hor -= 1
-        
+
 
         return self.provideControl()
 

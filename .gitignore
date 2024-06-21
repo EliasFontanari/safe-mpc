@@ -7,6 +7,7 @@
 generated/*
 nn_models/*
 data/*
+data(copy)/*
 .github/
 .idea/
 **/c_generated_code/

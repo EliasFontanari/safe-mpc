@@ -66,7 +66,7 @@ class AbstractModel:
         self.nn_model = None
         self.nn_func = None
 
-        self.state_tol = 1e-4
+        self.state_tol = 5e-4
 
     def addDynamicsModel(self, params):
         pass
@@ -128,6 +128,7 @@ class SimDynamics:
         sim.solver_options.T = self.params.dt_s
         sim.solver_options.integrator_type = self.params.integrator_type
         sim.solver_options.num_stages = self.params.num_stages
+        #sim.solver_options.num_steps = 4
         sim.parameter_values = np.array([0.])
         gen_name = self.params.GEN_DIR + '/sim_' + sim.model.name
         sim.code_export_directory = gen_name
@@ -212,6 +213,8 @@ class AbstractController:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
+        # self.ocp.solver_options.sim_method_num_stages = 3
+        # self.ocp.solver_options.sim_method_num_steps = 4
         #self.ocp.solver_options.nlp_solver_tol_eq = 1e-9
         # self.ocp.solver_options.levenberg_marquardt = 1e2
 
