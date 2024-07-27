@@ -42,6 +42,8 @@ class AbstractModel:
         self.amodel.xdot = self.x_dot
         self.amodel.u = self.u
         self.amodel.f_expl_expr = self.f_expl
+        self.amodel.f_impl_expr = self.x_dot - self.f_expl
+
         self.amodel.p = self.p
 
         self.nx = self.amodel.x.size()[0]
@@ -66,7 +68,7 @@ class AbstractModel:
         self.nn_model = None
         self.nn_func = None
 
-        self.state_tol = 5e-4
+        self.state_tol =1*5e-7
 
     def addDynamicsModel(self, params):
         pass
@@ -132,8 +134,9 @@ class SimDynamics:
         sim.parameter_values = np.array([0.])
         gen_name = self.params.GEN_DIR + '/sim_' + sim.model.name
         sim.code_export_directory = gen_name
+        self.sim=sim
         self.integrator = AcadosSimSolver(sim, build=self.params.regenerate, json_file=gen_name + '.json')
-
+        
     def simulate(self, x, u):
         self.integrator.set("x", x)
         self.integrator.set("u", u)
@@ -150,8 +153,15 @@ class SimDynamics:
             x_sim[i + 1] = self.simulate(x_sim[i], u[i])
         # Check if the rollout state trajectory is almost equal to the optimal one
         return np.linalg.norm(x - x_sim) < self.params.state_tol * np.sqrt(n+1) 
-
-
+    
+    def checkSafeIntegrate(self, x, u, n_safe):
+        x_sim = x[0]
+        for i in range(n_safe):
+            x_sim = self.simulate(x_sim,u[i])
+            if not(self.model.checkStateConstraints(x_sim)):
+                return False
+        return self.model.nn_func(x_sim, self.params.alpha) >= 0. 
+    
 class AbstractController:
     def __init__(self, simulator):
         self.ocp_name = "".join(re.findall('[A-Z][^A-Z]*', self.__class__.__name__)[:-1]).lower()
@@ -172,6 +182,8 @@ class AbstractController:
         # Cost
         self.Q = 1e-4 * np.eye(self.model.nx)
         self.Q[0, 0] = 5e2
+        self.Q[1,1] = 0.65e2  #0.65
+        self.Q[2,2] = 0.65e2  #0.65
         self.R = 1e-4 * np.eye(self.model.nu)
 
         self.ocp.cost.W = lin.block_diag(self.Q, self.R)
@@ -212,11 +224,19 @@ class AbstractController:
         self.ocp.solver_options.hpipm_mode = self.params.solver_mode
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
+        self.ocp.solver_options.integrator_type = 'ERK'
+        self.ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
+        #self.ocp.solver_options.qp_tol = 1e-3
+
+
+        #self.ocp.solver_options.qp_tol=1e-8
+        #self.ocp.solver_options.as_rti_iter = 5
         self.ocp.solver_options.globalization = self.params.globalization
+        self.ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
         # self.ocp.solver_options.sim_method_num_stages = 3
         # self.ocp.solver_options.sim_method_num_steps = 4
-        #self.ocp.solver_options.nlp_solver_tol_eq = 1e-9
-        # self.ocp.solver_options.levenberg_marquardt = 1e2
+        #self.ocp.solver_options.nlp_solver_tol_eq = 1e-3
+        #self.ocp.solver_options.levenberg_marquardt = 1e-3
 
         # Additional settings, in general is an empty method
         self.additionalSetting()
@@ -224,6 +244,7 @@ class AbstractController:
         self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
         self.ocp.code_export_directory = self.gen_name
         #self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=gen_name + '.json', build=self.params.regenerate)
+               
         self.reinit_solver()
 
         # Initialize guess
@@ -238,12 +259,24 @@ class AbstractController:
         # Viable state (None for Naive and ST controllers)
         self.x_viable = None
 
+        self.solver_integrator = AcadosSimSolver(self.ocp,json_file=self.gen_name +'2.json',build=self.params.regenerate,verbose=False)
+
+        
         # Time stats
         self.time_fields = ['time_lin', 'time_sim', 'time_qp', 'time_qp_solver_call',
                             'time_glob', 'time_reg', 'time_tot']
+        
+        
     def reinit_solver(self):
-        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name +'.json', build=self.params.regenerate,verbose=False)
 
+    def simulate_solver(self, x, u):
+        self.solver_integrator.set("x", x)
+        self.solver_integrator.set("u", u)
+        self.solver_integrator.solve()
+        x_next = self.solver_integrator.get("x")
+        return x_next
+    
     def additionalSetting(self):
         pass
 
@@ -298,6 +331,7 @@ class AbstractController:
             self.ocp_solver.set(i, 'u', self.u_guess[i])
             self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
             self.ocp_solver.cost_set(i, 'W', W, api='new')
+        self.ocp_solver.set(0,'x',x0)
 
         self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
         self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
@@ -353,6 +387,11 @@ class AbstractController:
 
     def getLastViableState(self):
         return np.copy(self.x_viable)
+    
+    def guessCorrection(self):
+        for i in range(len(self.u_temp)):
+            self.x_temp[i+1]=self.simulator.simulate(self.x_temp[i],self.u_temp[i])
+
 
 
 class IpoptController:

@@ -71,10 +71,12 @@ class Parameters:
 
         self.nlp_max_iter = int(controller['nlp_max_iter'])
         self.qp_max_iter = int(controller['qp_max_iter'])
+        #self.solver_type ='SQP'# 'SQP_RTI' if rti else 'SQP'
         self.solver_type = 'SQP_RTI' if rti else 'SQP'
         self.solver_mode = controller['solver_mode']
         self.alpha = int(controller['alpha'])
         self.conv_tol = float(controller['conv_tol'])
+        #self.globalization = 'MERIT_BACKTRACKING' #'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
         self.globalization = 'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
 
         self.dt = float(controller[cont_type]['dt'])

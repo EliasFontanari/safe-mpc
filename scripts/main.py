@@ -8,12 +8,14 @@ from safe_mpc.parser import Parameters, parse_args
 from safe_mpc.abstract import SimDynamics
 from safe_mpc.gravity_compensation import GravityCompensation
 from acados_template import AcadosOcpSolver
+from datetime import datetime
 
 
 def convergenceCriteria(x, mask=None):
     if mask is None:
         mask = np.ones(model.nx)
-    return np.linalg.norm(np.dot(mask, x - model.x_ref)) < conf.conv_tol
+    return np.linalg.norm(np.multiply(mask, x - model.x_ref)) < conf.conv_tol #\
+         # and np.abs(x[0] - model.x_ref[0]) <0.05 and np.abs(x[3] - model.x_ref[3]) <0.05   
 
 
 def init_guess(q0):
@@ -52,12 +54,15 @@ def init_guess(q0):
 #     return k, convergence, x_sim, stats, x_v
 
 def simulate_mpc(p):
+    #controller.reinit_solver()
+    #controller.ocp_solver = AcadosOcpSolver(controller.ocp,verbose=False)
     x0 = np.zeros((model.nx,))
     x0[:model.nq] = x0_vec[p]
 
     x_sim = np.empty((conf.n_steps + 1, model.nx)) * np.nan
     u = np.empty((conf.n_steps, model.nu)) * np.nan
     x_sim[0] = x0
+    simulator_state = x0
 
     controller.setGuess(x_guess_vec[p], u_guess_vec[p])
     if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
@@ -66,25 +71,89 @@ def simulate_mpc(p):
         controller.alternative_u_guess = controller.u_guess
     if args['controller'] == 'receding':
         controller.r=controller.N
-
+    controller.ocp_solver.update_qp_solver_cond_N
     controller.fails = 0
     stats = []
     convergence = 0
     k = 0
-    
+    x_simu[p].append(x0)
+
+    if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+        safe = controller.safe_hor
+    elif args['controller'] == 'receding':
+        safe = controller.r
+    safe_hor_hist[p].append(safe)
     
     for k in range(conf.n_steps):
+        #controller.reinit_solver()
+
+        #print(k)
+        # if k==52 and p==11:
+        #     pass
+        # if (np.abs(x_sim[k] - controller.x_guess[0]) > 1e-3).any():
+        #      print(f'difference: {np.abs(x_sim[k]-controller.x_guess[0])}, step:{p}-{k}\n')
+        #     print(u[k-1])
+        #if p==11 or p==31 or p==40 or p==79 or p==90:
+            # if (np.abs(x_sim[k] - controller.x_guess[0]) > 1e-7).any():
+                        
         u[k] = controller.step(x_sim[k])
         stats.append(controller.getTime())
-        x_sim[k + 1] = simulator.simulate(x_sim[k], u[k])
+        x_sim[k + 1] = controller.simulate_solver(x_sim[k], u[k])
+        simulator_state =simulator.simulate(x_sim[k], u[k])
+        x_simu[p].append(x_sim[k + 1])
+        u_simu[p].append(u[k])
+
+        with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+            np.set_printoptions(precision=6)
+            file.write(f'solver state: {controller.x_guess[0]}\n')
+            file.write(f'simulator solver state: {x_sim[k+1]}\n')
+            file.write(f'simulator state: {simulator_state}\n')
+            file.write(f'difference: {np.abs(x_sim[k+1]-controller.x_guess[0])}\n')
+            file.write(f'control: {u[k]}\n')
+            if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+                file.write(f'problem :{p} step: {k} safe_hor:{controller.safe_hor}\n')
+            if args['controller'] == 'receding':
+                file.write(f'problem :{p} step: {k} safe_hor:{controller.r}\n')
+
+        err_intgr = np.abs(x_sim[k+1]-controller.x_guess[0])
+        if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+            jump = controller.safe_hor - safe
+            # if controller.safe_hor - safe > 6:
+            #     print(f'new hor at problem :{p} step: {k}\n')
+            safe = controller.safe_hor
+            safe_hor_hist[p].append(safe)
+            jumps.append(jump)
+            error_jumps[jump+1].append(err_intgr)
+            if controller.core_solution != None:
+                core_sol.append(controller.core_solution)
+
+        elif args['controller'] == 'receding':
+            jump = controller.r - safe
+            safe = controller.r
+            safe_hor_hist[p].append(safe)
+            jumps.append(jump)
+            error_jumps[jump+1].append(np.abs(err_intgr))
+        errors[p].append(err_intgr)
+        controller.guessCorrection()
+
+        
         # Check if the next state is inside the state bounds
+
+        # if (np.abs(x_sim[k+1]-controller.simulate_solver(x_sim[k], u[k]))>1e-6).any():
+        #     print(np.abs(x_sim[k+1]-controller.simulate_solver(x_sim[k], u[k])))
+        # with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+        #     file.write(f'residuals: {controller.ocp_solver.get_residuals()}\n')
+        #     file.write(f'sqp_iter:{controller.ocp_solver.get_stats("sqp_iter")}\n')
+        #     file.write(f'qp_iter:{controller.ocp_solver.get_stats("qp_iter")}\n')
+        #     file.write(f'qp_stat:{controller.ocp_solver.get_stats("qp_stat")}\n')
+
         if not controller.checkStateConstraintsController(x_sim[k + 1]):
             violation_max = (x_sim[k+1]>controller.model.x_max)
             violation_min = (x_sim[k+1]<controller.model.x_min)
-            for i in range(violation_max.shape[0]):
-                if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
-                    if violation_max[i]: print(f'no tol upper bounds violated of : {x_sim[k+1][i]-controller.model.x_max[i]}, safe_hor = {controller.safe_hor}, state={i}')
-                    if violation_min[i]: print(f'no tol lower bounds violated of : {-x_sim[k+1][i]+controller.model.x_min[i]}, safe_hor = {controller.safe_hor}, state ={i}')
+            # for i in range(violation_max.shape[0]):
+            #     if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+            #         if violation_max[i]: print(f'no tol upper bounds violated of : {x_sim[k+1][i]-controller.model.x_max[i]}, safe_hor = {controller.safe_hor}, state={i}\n')
+            #         if violation_min[i]: print(f'no tol lower bounds violated of : {-x_sim[k+1][i]+controller.model.x_min[i]}, safe_hor = {controller.safe_hor}, state ={i}\n')
         if not model.checkStateConstraints(x_sim[k + 1]):
             if args['controller'] == 'receding':
                 print(controller.r)
@@ -95,7 +164,8 @@ def simulate_mpc(p):
                 for i in range(violation_max.shape[0]):
                     if violation_max[i]: violations.append([x_sim[k+1][i]-controller.model.x_max[i],p,k])#,controller.safe_hor])
                     if violation_min[i]: violations.append([-x_sim[k+1][i]+controller.model.x_min[i],p,k])#,controller.safe_hor])
-                print(f'control={u[k]}, state={x_sim[k+1]}')
+                # print(f'control={u[k]}, state={x_sim[k+1]}\n')
+                # print(k)
             break
         # Check convergence --> norm of diff btw x_sim and x_ref (only for first joint)
         if convergenceCriteria(x_sim[k + 1], np.array([1, 0, 0, 1, 0, 0])):
@@ -103,8 +173,12 @@ def simulate_mpc(p):
             print(f"{p}:{x0}=> SUCCESS")
             x0_success.append(x0)
             break
+        if k == conf.n_steps-1:
+            print(f'{p}:{x0}=>Not converged\n')
     x_v = controller.getLastViableState()
-    return k, convergence, x_sim, stats, x_v
+    with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+        file.write('\n\n\n')
+    return k, convergence, x_sim, stats, x_v, u
 
 
 if __name__ == '__main__':
@@ -145,9 +219,26 @@ if __name__ == '__main__':
     data_name = conf.DATA_DIR + args['controller'] + '_'
 
     print(f'Running {available_controllers[args["controller"]]} with alpha = {conf.alpha}...')
-
+    print(f'x_min = {controller.model.x_min}\n')
+    print(f'x_max = {controller.model.x_max}\n')
     reset_step=20
+    #x_simu = []
+    x_simu = [[] for _ in range(conf.test_num)]
+    u_simu = [[] for _ in range(conf.test_num)]
+    safe_hor_hist = [[] for _ in range(conf.test_num)]
+    jumps = []
+    error_jumps = [[] for _ in range(controller.N)]
+    errors = [[] for _ in range(conf.test_num)]
+    core_sol = []
 
+    with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'w') as file:
+        pass
+    
+    now = datetime.now()
+    folder_name = conf.DATA_DIR+now.strftime("%Y-%m-%d_%H-%M-%S") + str(controller.ocp.solver_options.qp_solver) \
+        + str(controller.ocp.solver_options.qp_solver_iter_max) \
+        + str(conf.n_steps)+'/'
+    os.makedirs(folder_name)
     # If ICs is active, compute the initial conditions for all the controller
     if args['init_conditions']:
         from scipy.stats import qmc
@@ -156,27 +247,41 @@ if __name__ == '__main__':
         l_bounds = model.x_min[:model.nq] + conf.state_tol
         u_bounds = model.x_max[:model.nq] - conf.state_tol
 
-        # Soft constraints an all the trajectory
+        # Soft constraints on all the trajectory
         for i in range(1, controller.N):
             controller.ocp_solver.cost_set(i, "zl", conf.ws_r * np.ones((1,)))
         controller.ocp_solver.cost_set(controller.N, "zl", conf.ws_t * np.ones((1,)))
 
+        bins = 10
+        x0_0_intervals = np.linspace(controller.model.x_min[0],controller.model.x_max[0],bins+1)
         h = 0
+        j = 0
         failures = 0
         x_init_vec, x_guess_vec, u_guess_vec = [], [], []
         progress_bar = tqdm(total=conf.test_num, desc='Init guess processing')
         while h < conf.test_num:
-            (x_g, u_g), status = init_guess(qmc.scale(sampler.random(), l_bounds, u_bounds))
-            if status:
-                x_init_vec.append(x_g[0, :model.nq])
-                x_guess_vec.append(x_g)
-                u_guess_vec.append(u_g)
-                h += 1
-                progress_bar.update(1)
-            else:
-                failures += 1
-            if failures % reset_step == 0:
-                controller.reinit_solver()
+            found = 0
+            while j < bins:
+                x_g0 = qmc.scale(sampler.random(), l_bounds, u_bounds)
+                if x0_0_intervals[j]<=x_g0[0][0]<x0_0_intervals[j+1]:
+                    (x_g, u_g), status = init_guess(x_g0)
+                    if status:
+                        x_init_vec.append(x_g[0, :model.nq])
+                        x_guess_vec.append(x_g)
+                        u_guess_vec.append(u_g)
+                        h += 1
+                        progress_bar.update(1)
+                        found +=1
+                    else:
+                        failures += 1
+                    if failures % reset_step == 0:
+                        controller.reinit_solver()
+                    if found == conf.test_num/bins:
+                        found =0
+                        j+=1
+                        with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+                            file.write('!!!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!\n\n\n')
+                
 
         progress_bar.close()
         np.save(conf.DATA_DIR + f'x_init_{conf.alpha}.npy', np.asarray(x_init_vec))
@@ -187,7 +292,7 @@ if __name__ == '__main__':
     elif args['guess']:
         x_init_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
         x_guess_vec, u_guess_vec, successes = [], [], []
-
+        progress_bar = tqdm(total=conf.test_num, desc='Init guess processing')
         if args['controller'] in ['naive', 'st']:
             for x_init in x_init_vec:
                 (x_g, u_g), status = init_guess(x_init)
@@ -213,6 +318,8 @@ if __name__ == '__main__':
                     # Refinement failed, use the feasible guess
                     x_guess_vec.append(x_feasible[i])
                     u_guess_vec.append(u_feasible[i])
+                progress_bar.update(1)
+        progress_bar.close()
         np.save(data_name + 'x_guess.npy', np.asarray(x_guess_vec))
         np.save(data_name + 'u_guess.npy', np.asarray(u_guess_vec))
         print('Init guess success: %d over %d' % (sum(successes), conf.test_num))
@@ -225,11 +332,11 @@ if __name__ == '__main__':
         u_guess_vec = np.load(data_name + 'u_guess.npy')
         res = []
         progress_bar = tqdm(total=conf.test_num, desc='Running on %d' %(conf.test_num))
-        for i in range(conf.test_num):
+        for i in range(0,conf.test_num):
             res.append(simulate_mpc(i))
             progress_bar.update(1)
         progress_bar.close()
-        steps, conv_vec, x_sim_vec, t_stats, x_viable = zip(*res)
+        steps, conv_vec, x_sim_vec, t_stats, x_viable, u_sim_vec = zip(*res)
         steps = np.array(steps)
         conv_vec = np.array(conv_vec)
         idx = np.where(conv_vec == 1)[0]
@@ -240,6 +347,11 @@ if __name__ == '__main__':
         times = np.array([t for arr in t_stats for t in arr])
         for field, t in zip(controller.time_fields, np.quantile(times, 0.99, axis=0)):
             print(f"{field:<20} -> {t}")
+        
+        with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+            file.write('Total convergence: %d over %d\n' % (np.sum(conv_vec), conf.test_num))
+            for field, t in zip(controller.time_fields, np.quantile(times, 0.99, axis=0)):
+                file.write(f"{field:<20} -> {t}\n")
 
         # Save last viable states (useful only for terminal/receding controllers)
         np.save(data_name + 'x_viable.npy', np.asarray(x_viable)[idx_abort])
@@ -258,6 +370,20 @@ if __name__ == '__main__':
         # np.savetxt(viol_dir+args['controller']+f'{controller.model.state_tol}.txt', violations)
         with open(data_name + 'x0succes.pkl', 'wb') as f:
                 pickle.dump(x0_success, f)
+        with open(folder_name + 'x_u.pkl', 'wb') as f:
+                pickle.dump({'x_sim': x_simu,
+                             'u_sim': u_simu},f)
+        with open(folder_name + 'jumps.pkl', 'wb') as f:
+                pickle.dump(jumps,f)
+        with open(folder_name + 'safehor_hist.pkl', 'wb') as f:
+                pickle.dump(safe_hor_hist,f)
+        with open(folder_name + 'error_jump.pkl', 'wb') as f:
+                pickle.dump(error_jumps,f)
+        with open(folder_name + 'errors.pkl', 'wb') as f:
+                pickle.dump(errors,f)
+        with open(folder_name + 'coreused.pkl', 'wb') as f:
+                pickle.dump(core_sol,f)
+        
     
 
     elif args['controller'] == 'abort' and args['abort'] in ['stwa', 'htwa', 'receding']:
@@ -282,3 +408,4 @@ if __name__ == '__main__':
               % (args['abort'], len(t_min), n_a, np.quantile(t_min, 0.99)))
     else:
         pass
+

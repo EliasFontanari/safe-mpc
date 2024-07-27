@@ -1,11 +1,11 @@
 # Common parameters for all controllers
 test_num: 100             # number of tests
-n_steps: 200              # number of time steps in each test
+n_steps: 800              # number of time steps in each test
 cpu_num: 20
 regenerate: true          # regenerate data
 
 nlp_max_iter: 150
-qp_max_iter: 150
+qp_max_iter: 100
 solver_mode: 'BALANCE'    # HPIPM mode, can be --> 'BALANCE', 'ROBUST', 'SPEED', 'SPEED_ABS'
 alpha: 2
 conv_tol: 1e-3            # convergence tolerance for the task
