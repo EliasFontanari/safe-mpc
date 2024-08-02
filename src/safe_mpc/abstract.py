@@ -68,7 +68,7 @@ class AbstractModel:
         self.nn_model = None
         self.nn_func = None
 
-        self.state_tol =1*5e-7
+        self.state_tol =1*5e-4
 
     def addDynamicsModel(self, params):
         pass
@@ -182,8 +182,8 @@ class AbstractController:
         # Cost
         self.Q = 1e-4 * np.eye(self.model.nx)
         self.Q[0, 0] = 5e2
-        self.Q[1,1] = 0.65e2  #0.65
-        self.Q[2,2] = 0.65e2  #0.65
+        self.Q[1,1] = 1e-4#0.65e2  #0.65
+        self.Q[2,2] = 1e-4#0.65e2  #0.65
         self.R = 1e-4 * np.eye(self.model.nu)
 
         self.ocp.cost.W = lin.block_diag(self.Q, self.R)

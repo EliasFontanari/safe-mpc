@@ -38,8 +38,8 @@ class NaiveController(AbstractController):
 
     def step(self, x):
         status = self.solve(x)
-        if status == 0 and self.model.checkControlConstraints(self.u_temp[0]): #and \
-        #    self.simulator.checkDynamicsConstraints(self.x_temp[:2], np.array([self.u_temp[0]])):
+        if status == 0 and self.model.checkControlConstraints(self.u_temp[0]):# and \
+           #self.simulator.checkDynamicsConstraints(self.x_temp[:2], np.array([self.u_temp[0]])):
             self.fails = 0
         else:
             self.fails += 1
@@ -98,6 +98,7 @@ class RecedingController(STWAController):
         self.r = self.N
         self.alternative_x_guess = self.x_guess
         self.alternative_u_guess = self.u_guess
+        self.max_negative_jump = -21
 
     def additionalSetting(self):
         # Terminal constraint before, since it construct the nn model
@@ -138,9 +139,8 @@ class RecedingController(STWAController):
         if constr_nodes != None:
             for i in range(1,self.N+1):
                 if np.all(np.array(constr_nodes) != i):
-                    if i == self.N+1:
-                        self.ocp_solver.set(i, 'sl', 1e4)
-                        self.ocp_solver.set(i, 'su', 1e4)
+                    self.ocp_solver.set(i, 'sl', 1e4)
+                    self.ocp_solver.set(i, 'su', 1e4)
 
         # Solve the OCP
         status = self.ocp_solver.solve()
@@ -167,11 +167,11 @@ class RecedingController(STWAController):
 
         r_new = -1
         for i in range(1, self.N + 1):
-            if self.model.checkSafeConstraints(self.x_temp[i]):
+            if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.max_negative_jump:
                 r_new = i - 1
 
         if status == 0 and self.checkRunningConstraintsController(self.x_temp, self.u_temp) \
-            and self.simulator.checkSafeIntegrate(self.x_temp,self.u_temp,r_new+1) and r_new > 0:
+            and r_new > 0:# and self.simulator.checkSafeIntegrate(self.x_temp,self.u_temp,r_new+1):
             self.fails = 0
             self.r = r_new
             with open('/home/utente/Documents/Optim/mpc-dock-default2/safe-mpc/data/'+ 'constraint_violations/'+'integration.txt', 'a') as file:
@@ -198,6 +198,7 @@ class ParallelController(RecedingController):
         self.alternative_x_guess = self.x_guess
         self.alternative_u_guess = self.u_guess
         self.core_solution=0
+        self.max_negative_jump=-9
         #self.ocp.cost.zl_e = np.zeros((1,))
         #self.ocp_solver.cost_set(self.N, "zl", np.zeros((1,)))
 
@@ -234,20 +235,22 @@ class ParallelController(RecedingController):
         #     file.write(f'qp_iter:{self.ocp_solver.get_stats("qp_iter")}\n')
         #     file.write(f'qp_stat:{self.ocp_solver.get_stats("qp_stat")}\n')
 
-        if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r>1 and status==0:
+        if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r>1 and (status==0):
             constr_ver = n_constr if check else 0
             n_step_safe = max(constr_ver,checked_r)
             # Uncomment this line to use parallel without check
-            n_step_safe = constr_ver
+            #n_step_safe = constr_ver
             if self.simulator.checkSafeIntegrate(self.x_temp,self.u_temp,n_step_safe):
                 success = True
+            #success=True
             # for i in range(self.N):
             #     self.alternative_x_guess[i] = self.ocp_solver.get(i, "x")
             #     self.alternative_u_guess[i] = self.ocp_solver.get(i, "u")
             # self.alternative_x_guess[-1] = self.ocp_solver.get(self.N, "x")
             #success = True
 
-        if success and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and n_step_safe>=self.safe_hor:
+        if success and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and (n_step_safe-self.safe_hor)>= self.max_negative_jump:  #n_step_safe>=self.safe_hor:
+            
             self.fails = 0
             self.safe_hor = n_step_safe
             with open('/home/utente/Documents/Optim/mpc-dock-default2/safe-mpc/data/'+ 'constraint_violations/'+'integration.txt', 'a') as file:
@@ -305,6 +308,7 @@ class ParallelController(RecedingController):
             self.core_solution = None 
         if failed and self.safe_hor < 2:
             print("NOT SOLVED")
+            self.x_viable = np.copy(self.x_guess[self.safe_hor])
             return None
         self.safe_hor -= 1
         return self.provideControl()
@@ -314,6 +318,8 @@ class ParallelWithCheck(RecedingController):
         super().__init__(simulator)
         #self.n_prob =  self.N - 1
         self.safe_hor = self.N
+        self.max_negative_jump=-5
+        self.core_solution=0
         #self.ocp.cost.zl_e = np.zeros((1,))
         #self.ocp_solver.cost_set(self.N, "zl", np.zeros((1,)))
 
@@ -354,7 +360,7 @@ class ParallelWithCheck(RecedingController):
         if (check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or r > 1 and status==0:
             constr_ver = n_constr if check else 0
             r = max(r,constr_ver)
-            r = constr_ver
+            #r = constr_ver
             if self.simulator.checkSafeIntegrate(self.x_temp,self.u_temp,r):
                 success = True
             # if r> n_constr:
@@ -362,7 +368,7 @@ class ParallelWithCheck(RecedingController):
             #success=True
 
 
-        if success and self.model.checkRunningConstraints(self.x_temp, self.u_temp):# and r>=self.safe_hor: #and success:
+        if success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and (r-self.safe_hor)>=self.max_negative_jump: #and success:
             
             #self.fails = 0
             success = True
@@ -377,21 +383,12 @@ class ParallelWithCheck(RecedingController):
 
     def step(self,x):
         results = []
-        if (np.abs(np.array(x[0:3]-self.x_ref[0:3]))<0.6).all():
-            self.Q[1,1]=0.7e2
-            self.Q[2,2]=0.7e2
-        elif np.abs(x[0]-self.x_ref[0])<0.3:
-            self.Q[1,1]=1e1
-            self.Q[2,2]=1e1 
-        else:
-            self.Q[1,1]=7e2
-            self.Q[2,2]=7e2
-        for i in range(self.N,1,-1):
+        for i in range(self.N,0,-1):
             results.insert(0,self.sing_step(x,i))
         r = results[-1]
         r_indx = len(results)-1
         i=0
-        for i in range(len(results)-1,0,-1):
+        for i in range(len(results)-1,-1,-1):
             if results[i] > r:
                 r=results[i]
                 r_indx = i
@@ -407,7 +404,7 @@ class ParallelWithCheck(RecedingController):
         #             cost=costs[i]
         #             r_indx = i
         if 1 < r  and r >= self.safe_hor:
-            rr=self.sing_step(x,r_indx+2)
+            rr=self.sing_step(x,r_indx+1)
             #status=self.solve(x)
             with open('/home/utente/Documents/Optim/mpc-dock-default2/safe-mpc/data/'+ 'constraint_violations/'+'integration.txt', 'a') as file:
                 file.write('SUCCESS\n')
@@ -420,15 +417,18 @@ class ParallelWithCheck(RecedingController):
                 print('status=1')
                 pass
             self.fails = 0 + status
-            self.safe_hor = r
-            self.guessCorrection()
+            self.safe_hor = rr
+            #self.guessCorrection()
             self.x_guess = self.x_temp
             #print(r)
+            self.core_solution = r_indx+2
         elif r<=1 and self.safe_hor <= 1:
             print("NOT SOLVED")
+            self.core_solution=None
             return None
         else:
             self.fails += 1
+            self.core_solution=None
         self.safe_hor -= 1
 
 

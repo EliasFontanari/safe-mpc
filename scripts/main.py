@@ -80,9 +80,11 @@ def simulate_mpc(p):
 
     if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
         safe = controller.safe_hor
+        safe_hor_hist[p].append(safe)
     elif args['controller'] == 'receding':
         safe = controller.r
-    safe_hor_hist[p].append(safe)
+        safe_hor_hist[p].append(safe)
+    
     
     for k in range(conf.n_steps):
         #controller.reinit_solver()
@@ -103,7 +105,7 @@ def simulate_mpc(p):
         x_simu[p].append(x_sim[k + 1])
         u_simu[p].append(u[k])
 
-        with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+        with open(folder_name+'integration.txt', 'a') as file:
             np.set_printoptions(precision=6)
             file.write(f'solver state: {controller.x_guess[0]}\n')
             file.write(f'simulator solver state: {x_sim[k+1]}\n')
@@ -158,6 +160,10 @@ def simulate_mpc(p):
             if args['controller'] == 'receding':
                 print(controller.r)
             print(f"{p}:{x0}=> Violated constraint")
+            with open(folder_name+'integration.txt', 'a') as file:
+                if (u[k][0]==None):
+                    file.write('NOT SOLVED')
+                file.write(f"{p}:{x0}=> Violated constraint\n")
             if not(np.isnan(u[k][0])):
                 violation_max = (x_sim[k+1]>controller.model.x_max)
                 violation_min = (x_sim[k+1]<controller.model.x_min)
@@ -171,12 +177,16 @@ def simulate_mpc(p):
         if convergenceCriteria(x_sim[k + 1], np.array([1, 0, 0, 1, 0, 0])):
             convergence = 1
             print(f"{p}:{x0}=> SUCCESS")
+            with open(folder_name+'integration.txt', 'a') as file:
+                file.write(f"{p}:{x0}=> SUCCESS")
             x0_success.append(x0)
             break
         if k == conf.n_steps-1:
             print(f'{p}:{x0}=>Not converged\n')
+            with open(folder_name+'integration.txt', 'a') as file:
+                file.write(f'{p}:{x0}=>Not converged\n')
     x_v = controller.getLastViableState()
-    with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+    with open(folder_name+'integration.txt', 'a') as file:
         file.write('\n\n\n')
     return k, convergence, x_sim, stats, x_v, u
 
@@ -227,18 +237,17 @@ if __name__ == '__main__':
     u_simu = [[] for _ in range(conf.test_num)]
     safe_hor_hist = [[] for _ in range(conf.test_num)]
     jumps = []
-    error_jumps = [[] for _ in range(controller.N)]
+    error_jumps = [[] for _ in range(controller.N+1)]
     errors = [[] for _ in range(conf.test_num)]
     core_sol = []
-
-    with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'w') as file:
-        pass
     
     now = datetime.now()
     folder_name = conf.DATA_DIR+now.strftime("%Y-%m-%d_%H-%M-%S") + str(controller.ocp.solver_options.qp_solver) \
         + str(controller.ocp.solver_options.qp_solver_iter_max) \
         + str(conf.n_steps)+'/'
     os.makedirs(folder_name)
+    with open(folder_name+'integration.txt', 'w') as file:
+        pass
     # If ICs is active, compute the initial conditions for all the controller
     if args['init_conditions']:
         from scipy.stats import qmc
@@ -279,7 +288,7 @@ if __name__ == '__main__':
                     if found == conf.test_num/bins:
                         found =0
                         j+=1
-                        with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+                        with open(folder_name+'integration.txt', 'a') as file:
                             file.write('!!!!!!!!!!!!!!!!!!!!\n!!!!!!!!!!!!!!!\n\n\n')
                 
 
@@ -348,7 +357,7 @@ if __name__ == '__main__':
         for field, t in zip(controller.time_fields, np.quantile(times, 0.99, axis=0)):
             print(f"{field:<20} -> {t}")
         
-        with open(conf.DATA_DIR+ 'constraint_violations/'+'integration.txt', 'a') as file:
+        with open(folder_name+'integration.txt', 'a') as file:
             file.write('Total convergence: %d over %d\n' % (np.sum(conv_vec), conf.test_num))
             for field, t in zip(controller.time_fields, np.quantile(times, 0.99, axis=0)):
                 file.write(f"{field:<20} -> {t}\n")
