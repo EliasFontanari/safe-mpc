@@ -1,37 +1,8 @@
 import os
 import yaml
 import numpy as np
-import argparse
-
-
-def parse_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-s', '--system', type=str, default='triple_pendulum',
-                        help='Systems to test. Available: double_pendulum, triple_pendulum')
-    parser.add_argument('-c', '--controller', type=str, default='naive',
-                        help='Controllers to test. Available: naive, st, stwa, htwa, receding')
-    parser.add_argument('-i', '--init-conditions', action='store_true',
-                        help='Find the initial conditions for testing all the controller')
-    parser.add_argument('-g', '--guess', action='store_true',
-                        help='Compute the initial guess of a given controller')
-    parser.add_argument('--rti', action='store_true',
-                        help='Use SQP-RTI for the MPC solver')
-    parser.add_argument('--alpha', type=int, default=2,
-                        help='Safety margin for the NN model')
-    parser.add_argument('-a', '--abort', type=str, default=None,
-                        help='Define the MPC formulation for which the abort controller is tested. '
-                             'Available: stwa, htwa and receding')
-    parser.add_argument('--repetition', type=int, default=5,
-                        help='Number of repetitions for the abort controller')
-    parser.add_argument('--plot', action='store_true',
-                        help='Plot the results')
-    return vars(parser.parse_args())
-
-
 class Parameters:
-    def __init__(self, m_name, cont_type, rti=True):
-        self.cont_type = cont_type
-
+    def __init__(self, m_name):
         # Define all the useful paths
         self.PKG_DIR = os.path.dirname(os.path.abspath(__file__))
         self.ROOT_DIR = self.PKG_DIR.split('/src/safe_mpc')[0]
@@ -71,16 +42,9 @@ class Parameters:
         self.cpu_num = int(controller['cpu_num'])
         self.regenerate = bool(controller['regenerate'])
 
-        self.nlp_max_iter = int(controller['nlp_max_iter'])
-        self.qp_max_iter = int(controller['qp_max_iter'])
-        #self.solver_type ='SQP'# 'SQP_RTI' if rti else 'SQP'
-        self.solver_type = 'SQP_RTI' if rti else 'SQP'
-        self.solver_mode = controller['solver_mode']
         self.alpha = int(controller['alpha'])
         self.conv_tol = float(controller['conv_tol'])
-        #self.globalization = 'MERIT_BACKTRACKING' #'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
-        self.globalization = 'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
-
+        cont_type = 'receding'
         self.dt = float(controller[cont_type]['dt'])
         self.T = float(controller[cont_type]['T'])
 

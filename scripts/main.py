@@ -14,8 +14,7 @@ from datetime import datetime
 def convergenceCriteria(x, mask=None):
     if mask is None:
         mask = np.ones(model.nx)
-    return np.linalg.norm(np.multiply(mask, x - model.x_ref)) < conf.conv_tol #\
-         # and np.abs(x[0] - model.x_ref[0]) <0.05 and np.abs(x[3] - model.x_ref[3]) <0.05   
+    return np.linalg.norm(np.multiply(mask, x - model.x_ref)) < conf.conv_tol 
 
 
 def init_guess(q0):
@@ -65,7 +64,7 @@ def simulate_mpc(p):
     simulator_state = x0
 
     controller.setGuess(x_guess_vec[p], u_guess_vec[p])
-    if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+    if 'parallel' in args['controller']:
         controller.safe_hor = controller.N 
         controller.alternative_x_guess = controller.x_guess
         controller.alternative_u_guess = controller.u_guess
@@ -78,7 +77,7 @@ def simulate_mpc(p):
     k = 0
     x_simu[p].append(x0)
 
-    if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+    if 'parallel' in args['controller']:
         safe = controller.safe_hor
         safe_hor_hist[p].append(safe)
     elif args['controller'] == 'receding':
@@ -90,18 +89,20 @@ def simulate_mpc(p):
         #controller.reinit_solver()
 
         #print(k)
-        # if k==52 and p==11:
-        #     pass
+        if k==113 and p==0:
+            pass
         # if (np.abs(x_sim[k] - controller.x_guess[0]) > 1e-3).any():
         #      print(f'difference: {np.abs(x_sim[k]-controller.x_guess[0])}, step:{p}-{k}\n')
         #     print(u[k-1])
         #if p==11 or p==31 or p==40 or p==79 or p==90:
             # if (np.abs(x_sim[k] - controller.x_guess[0]) > 1e-7).any():
-                        
+        # if controller.safe_hor ==0:
+        #     pass           
         u[k] = controller.step(x_sim[k])
         stats.append(controller.getTime())
-        x_sim[k + 1] = controller.simulate_solver(x_sim[k], u[k])
-        simulator_state =simulator.simulate(x_sim[k], u[k])
+        simulator_state = controller.simulate_solver(x_sim[k], u[k])
+        x_sim[k+1]=simulator.simulate(x_sim[k], u[k])
+        #print(controller.x_viable-controller.simulator.checkSafeIntegrate([x_sim[k]],controller.u_guess,controller.safe_hor)[1])
         x_simu[p].append(x_sim[k + 1])
         u_simu[p].append(u[k])
 
@@ -112,13 +113,13 @@ def simulate_mpc(p):
             file.write(f'simulator state: {simulator_state}\n')
             file.write(f'difference: {np.abs(x_sim[k+1]-controller.x_guess[0])}\n')
             file.write(f'control: {u[k]}\n')
-            if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+            if 'parallel' in args['controller']:
                 file.write(f'problem :{p} step: {k} safe_hor:{controller.safe_hor}\n')
             if args['controller'] == 'receding':
                 file.write(f'problem :{p} step: {k} safe_hor:{controller.r}\n')
 
         err_intgr = np.abs(x_sim[k+1]-controller.x_guess[0])
-        if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+        if 'parallel' in args['controller']:
             jump = controller.safe_hor - safe
             # if controller.safe_hor - safe > 6:
             #     print(f'new hor at problem :{p} step: {k}\n')
@@ -136,7 +137,10 @@ def simulate_mpc(p):
             jumps.append(jump)
             error_jumps[jump+1].append(np.abs(err_intgr))
         errors[p].append(err_intgr)
-        controller.guessCorrection()
+        # if controller.step_old_solution > 0:
+        #     controller.guessCorrection()
+        #     #controller.step_old_solution = 0
+        #controller.guessCorrection()
 
         
         # Check if the next state is inside the state bounds
@@ -202,7 +206,9 @@ if __name__ == '__main__':
                              'htwa': 'HTWAController',
                              'receding': 'RecedingController',
                              'parallel': 'ParallelController',
+                             'parallel_limited':'ParallelLimited',
                              'parallel2': 'ParallelWithCheck',
+                             'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
 
     if args['init_conditions']:
@@ -216,7 +222,7 @@ if __name__ == '__main__':
     # Define the configuration object, model, simulator and controller
     conf = Parameters(args['system'], args['controller'], args['rti'])
     # Set the safety margin
-    conf.alpha = args['alpha']
+    #conf.alpha = args['alpha']
     model = getattr(models, available_systems[args['system']])(conf)
     gc = GravityCompensation(conf, model)
     simulator = SimDynamics(model)
@@ -285,6 +291,9 @@ if __name__ == '__main__':
                         failures += 1
                     if failures % reset_step == 0:
                         controller.reinit_solver()
+                        for i in range(1, controller.N):
+                            controller.ocp_solver.cost_set(i, "zl", conf.ws_r * np.ones((1,)))
+                        controller.ocp_solver.cost_set(controller.N, "zl", conf.ws_t * np.ones((1,)))
                     if found == conf.test_num/bins:
                         found =0
                         j+=1
@@ -333,7 +342,7 @@ if __name__ == '__main__':
         np.save(data_name + 'u_guess.npy', np.asarray(u_guess_vec))
         print('Init guess success: %d over %d' % (sum(successes), conf.test_num))
 
-    elif args['rti']:
+    elif args['rti'] and args['controller']!= 'abort':
         x0_success = []
         violations=[]
         x0_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
@@ -395,26 +404,108 @@ if __name__ == '__main__':
         
     
 
-    elif args['controller'] == 'abort' and args['abort'] in ['stwa', 'htwa', 'receding']:
+    elif args['controller'] == 'abort' and args['abort'] in ['stwa', 'htwa', 'receding','parallel','parallel_limited','parallel2']:
+        import matplotlib.pyplot as plt
+        tgrid = np.linspace(0,conf.T,int(conf.T/conf.dt)+1)
         # Increase time horizon
         x_viable = np.load(conf.DATA_DIR + args['abort'] + '_' + 'x_viable.npy')
         n_a = np.shape(x_viable)[0]
         rep = args['repetition']
         t_rep = np.empty((n_a, rep)) * np.nan
+        controller.model.setNNmodel()
         for i in range(n_a):
+            print(f'{i} x_viable={x_viable[i]} \n\n\n\n\n')
+            controller.reinit_solver()
+            #controller.ocp_solver.reset()
             # Repeat each test rep times
             for j in range(rep):
+                #u0 = gc.solve(x_viable[i])
                 controller.setGuess(np.full((controller.N + 1, model.nx), x_viable[i]),
-                                    np.zeros((controller.N, model.nu)))
+                                    np.zeros((controller.N,model.nu)))
                 status = controller.solve(x_viable[i])
-                if status == 0:
-                    t_rep[i, j] = controller.ocp_solver.get_stats('time_tot')[0]
+                print(f'is x viable:{controller.model.nn_func(x_viable[i], controller.model.params.alpha)}')
+                print(f"status {status} nlp iter:{controller.ocp_solver.get_stats('nlp_iter')} qp iter:{controller.ocp_solver.get_stats('nlp_iter')} qp_stat:\
+                    {controller.ocp_solver.get_stats('qp_stat')}")
+                if status == 0 or status==2:
+                    print(status)
+                    if (np.abs(controller.x_temp[-1][3:]) < 1e-2).all():
+                        
+                        integrated_sol=x_viable[i].reshape(1,-1) 
+                        for k in range(controller.u_temp.shape[0]):
+                            integrated_sol= np.vstack([integrated_sol,simulator.simulate(integrated_sol[k,:],controller.u_temp[k])])
+
+                        if controller.model.checkStateConstraints(integrated_sol) and (np.abs(integrated_sol[-1,3:])<1e-3).all():
+                            t_rep[i, j] = controller.ocp_solver.get_stats('time_tot')
+                            print('SUCCESS')
+                        if False:
+                            plt.figure(f'Position,problem {i}, status {status}')
+                            plt.title(f'Position,problem {i}, status {status}')
+                            plt.clf()
+                            plt.plot(tgrid, controller.x_temp[:,0], '--')
+                            plt.plot(tgrid, controller.x_temp[:,1], '-')
+                            plt.plot(tgrid, controller.x_temp[:,2], '-')
+                            plt.plot(tgrid, integrated_sol[:,0], '--')
+                            plt.plot(tgrid, integrated_sol[:,1], '-')
+                            plt.plot(tgrid, integrated_sol[:,2], '-')
+                            plt.xlabel('t')
+                            plt.legend(['x1','x2','x3','x1_sim','x2_sim','x3_sim'])
+                            plt.grid()
+                            plt.axhline(y=controller.model.x_min[0], color='r', linestyle='-')
+                            plt.axhline(y=controller.model.x_max[0], color='r', linestyle='-')
+                            plt.show()
+
+                            plt.figure(f'Velocity, problem {i}')
+                            plt.title(f'Velocity, problem {i}')
+                            plt.clf()
+                            plt.plot(tgrid, controller.x_temp[:,3], '--')
+                            plt.plot(tgrid, controller.x_temp[:,4], '-')
+                            plt.plot(tgrid, controller.x_temp[:,5], '-')
+                            plt.plot(tgrid, integrated_sol[:,3], '--')
+                            plt.plot(tgrid, integrated_sol[:,4], '-')
+                            plt.plot(tgrid, integrated_sol[:,5], '-')
+                            plt.axhline(y=controller.model.x_min[3], color='r', linestyle='-')
+                            plt.axhline(y=controller.model.x_max[3], color='r', linestyle='-')
+                            plt.xlabel('t')
+                            plt.legend(['x1','x2','x3','x1_sim','x2_sim','x3_sim'])
+                            plt.grid()
+                            plt.show()
+                        print(integrated_sol[-1][3:])
+
+                    
+
         # Compute the minimum time for each initial condition
         t_min = np.min(t_rep, axis=1)
         # Remove the nan values (i.e. the initial conditions for which the controller failed)
         t_min = t_min[~np.isnan(t_min)]
         print('Controller: %s\nAbort: %d over %d\nQuantile (99) time: %.3f'
-              % (args['abort'], len(t_min), n_a, np.quantile(t_min, 0.99)))
+              % (args['abort'], len(t_min), n_a, 0))
     else:
         pass
+
+
+    # elif args['controller'] == 'abort' and args['abort'] in ['stwa', 'htwa', 'receding','parallel']:
+    #     # Increase time horizon
+    #     x_viable = np.load(conf.DATA_DIR + args['abort'] + '_' + 'x_viable.npy')
+    #     n_a = np.shape(x_viable)[0]
+    #     rep = args['repetition']
+    #     t_rep = np.empty((n_a, rep)) * np.nan
+    #     for i in range(n_a):
+    #         # Repeat each test rep times
+    #         for j in range(rep):
+    #             print(i)
+    #             controller.setGuess(np.full((controller.N + 1, model.nx), x_viable[i]),
+    #                                 np.zeros((controller.N, model.nu)))
+    #             status = controller.solve(x_viable[i])
+    #             if status == 0:
+    #                 t_rep[i, j] = controller.ocp_solver.get_stats('time_tot')
+    #                 print(controller.x_temp[-1])
+                    
+    #     # Compute the minimum time for each initial condition
+    #     t_min = np.min(t_rep, axis=1)
+    #     # Remove the nan values (i.e. the initial conditions for which the controller failed)
+    #     t_min = t_min[~np.isnan(t_min)]
+    #     print('Controller: %s\nAbort: %d over %d\nQuantile (99) time: %.3f'
+    #           % (args['abort'], len(t_min), n_a, 0))
+    # else:
+    #     pass
 

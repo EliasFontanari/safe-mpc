@@ -42,8 +42,6 @@ class AbstractModel:
         self.amodel.xdot = self.x_dot
         self.amodel.u = self.u
         self.amodel.f_expl_expr = self.f_expl
-        self.amodel.f_impl_expr = self.x_dot - self.f_expl
-
         self.amodel.p = self.p
 
         self.nx = self.amodel.x.size()[0]
@@ -159,8 +157,8 @@ class SimDynamics:
         for i in range(n_safe):
             x_sim = self.simulate(x_sim,u[i])
             if not(self.model.checkStateConstraints(x_sim)):
-                return False
-        return self.model.nn_func(x_sim, self.params.alpha) >= 0. 
+                return False, None
+        return self.model.nn_func(x_sim, self.params.alpha) >= 0. , x_sim 
     
 class AbstractController:
     def __init__(self, simulator):
@@ -168,6 +166,7 @@ class AbstractController:
         self.simulator = simulator
         self.params = simulator.params
         self.model = simulator.model
+        self.err_thr=1
 
         self.N = int(self.params.T / self.params.dt)
         self.ocp = AcadosOcp()
@@ -182,8 +181,9 @@ class AbstractController:
         # Cost
         self.Q = 1e-4 * np.eye(self.model.nx)
         self.Q[0, 0] = 5e2
-        self.Q[1,1] = 1e-4#0.65e2  #0.65
-        self.Q[2,2] = 1e-4#0.65e2  #0.65
+        # self.Q[1,1] = 1e-4#0.65e2  #0.65
+        # self.Q[2,2] = 1e-4#0.65e2  #0.65
+        # self.Q[3,3] = 0.8e0#0.65e2  #0.65
         self.R = 1e-4 * np.eye(self.model.nu)
 
         self.ocp.cost.W = lin.block_diag(self.Q, self.R)
@@ -224,28 +224,33 @@ class AbstractController:
         self.ocp.solver_options.hpipm_mode = self.params.solver_mode
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
-        self.ocp.solver_options.integrator_type = 'ERK'
-        self.ocp.solver_options.hessian_approx = 'GAUSS_NEWTON'
+        self.ocp.solver_options.globalization = self.params.globalization
+        # self.ocp.solver_options.integrator_type = 'DISCRETE'
+        # self.ocp.solver_options.hessian_approx = 'EXACT'
         #self.ocp.solver_options.qp_tol = 1e-3
 
 
         #self.ocp.solver_options.qp_tol=1e-8
         #self.ocp.solver_options.as_rti_iter = 5
-        self.ocp.solver_options.globalization = self.params.globalization
-        self.ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
+        if self.params.cont_type== 'abort':
+            self.ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
+            self.ocp.solver_options.nlp_solver_tol_eq = 5e-4
+            self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
         # self.ocp.solver_options.sim_method_num_stages = 3
         # self.ocp.solver_options.sim_method_num_steps = 4
-        #self.ocp.solver_options.nlp_solver_tol_eq = 1e-3
-        #self.ocp.solver_options.levenberg_marquardt = 1e-3
+        # self.ocp.solver_options.nlp_solver_tol_eq = 5e-4
+        # self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
+
+        #self.ocp.solver_options.levenberg_marquardt = 1e-4
 
         # Additional settings, in general is an empty method
         self.additionalSetting()
 
         self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
         self.ocp.code_export_directory = self.gen_name
-        #self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=gen_name + '.json', build=self.params.regenerate)
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
                
-        self.reinit_solver()
+        #self.reinit_solver()
 
         # Initialize guess
         self.fails = 0
@@ -268,7 +273,7 @@ class AbstractController:
         
         
     def reinit_solver(self):
-        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name +'.json', build=self.params.regenerate,verbose=False)
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name +'.json', build=True,verbose=False)
 
     def simulate_solver(self, x, u):
         self.solver_integrator.set("x", x)
@@ -353,16 +358,26 @@ class AbstractController:
         if self.fails > 0:
             u = self.u_guess[0]
             # Rollback the previous guess
+            #self.guessCorrection()
             self.x_guess = np.roll(self.x_guess, -1, axis=0)
             self.u_guess = np.roll(self.u_guess, -1, axis=0)
+            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+                self.x_guess[-1] = self.simulator.simulate(self.x_guess[-2],self.u_guess[-2])
         else:
             u = self.u_temp[0]
+            #self.x_guess = np.copy(self.x_temp)
+            #self.guessCorrection()
             # Save the current temporary solution
             self.x_guess = np.roll(self.x_temp, -1, axis=0)
             self.u_guess = np.roll(self.u_temp, -1, axis=0)
+            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+                self.guessCorrection()
+
         # Copy the last values
-        self.x_guess[-1] = np.copy(self.x_guess[-2])
+        if self.params.cont_type != 'receding' or self.params.cont_type != 'parallel2' or self.params.cont_type != 'parallel_limited':
+            self.x_guess[-1] = np.copy(self.x_guess[-2])
         self.u_guess[-1] = np.copy(self.u_guess[-2])
+        #self.guessCorrection()
         return u
 
     def step(self, x0):
@@ -388,9 +403,19 @@ class AbstractController:
     def getLastViableState(self):
         return np.copy(self.x_viable)
     
+    # def guessCorrection(self):
+    #     for i in range(len(self.u_guess)):
+    #         self.x_guess[i+1]=self.simulator.simulate(self.x_guess[i],self.u_guess[i])
+
     def guessCorrection(self):
-        for i in range(len(self.u_temp)):
-            self.x_temp[i+1]=self.simulator.simulate(self.x_temp[i],self.u_temp[i])
+        error = 0
+        x_corrected = np.copy(self.x_guess) 
+        for i in range(len(self.u_guess)):
+            x_corrected[i+1]=self.simulator.simulate(x_corrected[i],self.u_guess[i])
+            error += np.linalg.norm(np.abs(self.x_guess[i+1]-x_corrected[i+1]))
+        if error > self.err_thr:
+            #print(error)
+            self.x_guess = x_corrected
 
 
 
