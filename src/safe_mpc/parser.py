@@ -85,6 +85,8 @@ class Parameters:
         self.T = float(controller[cont_type]['T'])
 
         self.min_negative_jump = int(controller['min_negative_jump'])
+        self.err_thr = float(controller['traj_err_threshold'])
+        self.bounds_tol = float(controller['bounds_tolerance'])
         
 
         if cont_type not in ['naive', 'abort']:

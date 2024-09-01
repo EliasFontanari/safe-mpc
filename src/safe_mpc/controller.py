@@ -107,7 +107,7 @@ class RecedingController(STWAController):
         self.terminalConstraint()
         self.runningConstraint()
 
-    def solve(self, x0,constr_nodes=None,alternative_guess=None):
+    def solve(self, x0,constr_nodes=None):
         # Reset current iterate
         self.ocp_solver.reset()
 
@@ -119,24 +119,14 @@ class RecedingController(STWAController):
         y_ref[:self.model.nx] = self.x_ref
         W = lin.block_diag(self.Q, self.R)
 
-        if alternative_guess == None:
-            for i in range(self.N):
-                self.ocp_solver.set(i, 'x', self.x_guess[i])
-                self.ocp_solver.set(i, 'u', self.u_guess[i])
-                self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
-                self.ocp_solver.cost_set(i, 'W', W, api='new')
-            self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
-            self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
-            self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
-        else:
-            for i in range(self.N):
-                self.ocp_solver.set(i, 'x', self.alternative_x_guess[i])
-                self.ocp_solver.set(i, 'u', self.alternative_u_guess[i])
-                self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
-                self.ocp_solver.cost_set(i, 'W', W, api='new')
-            self.ocp_solver.set(self.N, 'x', self.alternative_x_guess[-1])
-            self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
-            self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
+        for i in range(self.N):
+            self.ocp_solver.set(i, 'x', self.x_guess[i])
+            self.ocp_solver.set(i, 'u', self.u_guess[i])
+            self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
+            self.ocp_solver.cost_set(i, 'W', W, api='new')
+        self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
+        self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+        self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
 
         if constr_nodes != None:
             for i in range(1,self.N+1):
@@ -470,7 +460,7 @@ class ParallelLimited(ParallelWithCheck):
         super().__init__(simulator)
         self.cores = self.params.n_cores
         self.constrains = []
-        self.constraint_mode = self.high_nodes_constraint
+        self.constraint_mode = self.CIS_distance_constraint
 
     def high_nodes_constraint(self):
         self.constrains = []

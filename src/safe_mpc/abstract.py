@@ -66,7 +66,7 @@ class AbstractModel:
         self.nn_model = None
         self.nn_func = None
 
-        self.state_tol =1*5e-4
+        self.state_tol =params.bounds_tol
 
     def addDynamicsModel(self, params):
         pass
@@ -166,7 +166,7 @@ class AbstractController:
         self.simulator = simulator
         self.params = simulator.params
         self.model = simulator.model
-        self.err_thr=1e-3
+        self.err_thr=self.params.err_thr
 
         self.N = int(self.params.T / self.params.dt)
         self.ocp = AcadosOcp()
