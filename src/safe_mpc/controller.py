@@ -9,15 +9,6 @@ class NaiveController(AbstractController):
         self.tol_array= np.ones(self.x_guess.shape)*0e-4
         self.tol_array[0] = 0
 
-    def checkStateConstraintsController(self, x):
-        return np.all(np.logical_and(x >= self.model.x_min-self.tol_array, x <= self.model.x_max+self.tol_array))
-
-    def checkControlConstraintsController(self, u):
-        return np.all(np.logical_and(u >= self.model.u_min, u <= self.model.u_max))
-
-    def checkRunningConstraintsController(self, x, u):
-        return self.checkStateConstraintsController(x) and self.checkControlConstraintsController(u)
-
     def checkGuess(self):
         return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
                self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp)
@@ -162,7 +153,7 @@ class RecedingController(STWAController):
             if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
                 r_new = i 
 
-        if status == 0 and self.checkRunningConstraintsController(self.x_temp, self.u_temp) \
+        if status == 0 and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
             and r_new > 1 and self.simulator.checkSafeIntegrate([x],self.u_temp,r_new)[0]:
             
             self.fails = 0
@@ -243,7 +234,7 @@ class ParallelController(RecedingController):
             # self.alternative_x_guess[-1] = self.ocp_solver.get(self.N, "x")
             #success = True
 
-        if success and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and \
+        if success and self.model.checkRunningConstraintstroller(self.x_temp, self.u_temp) and \
            (n_step_safe-self.safe_hor)>= self.min_negative_jump:  #n_step_safe>=self.safe_hor:
             
             self.fails = 0
@@ -336,7 +327,7 @@ class RecedingParallel(ParallelController):
             if self.simulator.checkSafeIntegrate(self.x_temp,self.u_temp,n_step_safe):
                 success = True
 
-        if success and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and \
+        if success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
             (n_step_safe-self.safe_hor)>= self.min_negative_jump:  #n_step_safe>=self.safe_hor:
             
             self.fails = 0
@@ -400,7 +391,7 @@ class ParallelWithCheck(RecedingController):
         r=0
         success = False
         self.constrain_n(n_constr)
-        status = self.solve(x,[n_constr],alternative_guess=None)
+        status = self.solve(x,[n_constr])
         checked_r = self.check_safe_n()
 
         if ((check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r > 1) and (status==0):
@@ -411,7 +402,7 @@ class ParallelWithCheck(RecedingController):
                 success = True
 
 
-        if success and success and self.checkRunningConstraintsController(self.x_temp, self.u_temp) and \
+        if success and success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
            (n_step_safe-self.safe_hor)>= self.min_negative_jump:
             
             #self.fails = 0
