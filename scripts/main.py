@@ -24,34 +24,6 @@ def init_guess(q0):
     flag = controller.initialize(x0)
     return controller.getGuess(), flag
 
-
-# def simulate_mpc(p):
-#     x0 = np.zeros((model.nx,))
-#     x0[:model.nq] = x0_vec[p]
-
-#     x_sim = np.empty((conf.n_steps + 1, model.nx)) * np.nan
-#     u = np.empty((conf.n_steps, model.nu)) * np.nan
-#     x_sim[0] = x0
-
-#     controller.setGuess(x_guess_vec[p], u_guess_vec[p])
-#     controller.fails = 0
-#     stats = []
-#     convergence = 0
-#     k = 0
-#     for k in range(conf.n_steps):
-#         u[k] = controller.step(x_sim[k])
-#         stats.append(controller.getTime())
-#         x_sim[k + 1] = simulator.simulate(x_sim[k], u[k])
-#         # Check if the next state is inside the state bounds
-#         if not model.checkStateConstraints(x_sim[k + 1]):
-#             break
-#         # Check convergence --> norm of diff btw x_sim and x_ref (only for first joint)
-#         if convergenceCriteria(x_sim[k + 1], np.array([1, 0, 0, 1, 0, 0])):
-#             convergence = 1
-#             break
-#     x_v = controller.getLastViableState()
-#     return k, convergence, x_sim, stats, x_v
-
 def simulate_mpc(p):
     #controller.reinit_solver()
     #controller.ocp_solver = AcadosOcpSolver(controller.ocp,verbose=False)
@@ -85,19 +57,7 @@ def simulate_mpc(p):
         safe_hor_hist[p].append(safe)
     
     
-    for k in range(conf.n_steps):
-        #controller.reinit_solver()
-
-        #print(k)
-        if k==113 and p==0:
-            pass
-        # if (np.abs(x_sim[k] - controller.x_guess[0]) > 1e-3).any():
-        #      print(f'difference: {np.abs(x_sim[k]-controller.x_guess[0])}, step:{p}-{k}\n')
-        #     print(u[k-1])
-        #if p==11 or p==31 or p==40 or p==79 or p==90:
-            # if (np.abs(x_sim[k] - controller.x_guess[0]) > 1e-7).any():
-        # if controller.safe_hor ==0:
-        #     pass           
+    for k in range(conf.n_steps):        
         u[k] = controller.step(x_sim[k])
         stats.append(controller.getTime())
         simulator_state = controller.simulate_solver(x_sim[k], u[k])
@@ -289,7 +249,8 @@ if __name__ == '__main__':
                         found +=1
                     else:
                         failures += 1
-                    if failures % reset_step == 0:
+                    if controller.ocp_solver.get_stats('qp_stat')[-1]==3: # failures % reset_step == 0:
+                        print('RESET')
                         controller.reinit_solver()
                         for i in range(1, controller.N):
                             controller.ocp_solver.cost_set(i, "zl", conf.ws_r * np.ones((1,)))
@@ -317,6 +278,7 @@ if __name__ == '__main__':
                 x_guess_vec.append(x_g)
                 u_guess_vec.append(u_g)
                 successes.append(status)
+                progress_bar.update(1)
         else:
             x_feasible = np.load(conf.DATA_DIR + f'x_guess_vec_{conf.alpha}.npy')
             u_feasible = np.load(conf.DATA_DIR + f'u_guess_vec_{conf.alpha}.npy')
@@ -338,16 +300,16 @@ if __name__ == '__main__':
                     u_guess_vec.append(u_feasible[i])
                 progress_bar.update(1)
         progress_bar.close()
-        np.save(data_name + 'x_guess.npy', np.asarray(x_guess_vec))
-        np.save(data_name + 'u_guess.npy', np.asarray(u_guess_vec))
+        np.save(data_name + f'x_guess_{controller.params.alpha}.npy', np.asarray(x_guess_vec))
+        np.save(data_name + f'u_guess_{controller.params.alpha}.npy', np.asarray(u_guess_vec))
         print('Init guess success: %d over %d' % (sum(successes), conf.test_num))
 
     elif args['rti'] and args['controller']!= 'abort':
         x0_success = []
         violations=[]
         x0_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
-        x_guess_vec = np.load(data_name + 'x_guess.npy')
-        u_guess_vec = np.load(data_name + 'u_guess.npy')
+        x_guess_vec = np.load(data_name + f'x_guess_{conf.alpha}.npy')
+        u_guess_vec = np.load(data_name + f'u_guess_{conf.alpha}.npy')
         res = []
         progress_bar = tqdm(total=conf.test_num, desc='Running on %d' %(conf.test_num))
         for i in range(0,conf.test_num):

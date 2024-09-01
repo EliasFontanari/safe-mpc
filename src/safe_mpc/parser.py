@@ -33,7 +33,7 @@ class Parameters:
         self.cont_type = cont_type
 
         # Define all the useful paths
-        self.PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+        self.PKG_DIR = os.getcwd()+ '/src/safe_mpc'
         self.ROOT_DIR = self.PKG_DIR.split('/src/safe_mpc')[0]
         self.CONF_DIR = os.path.join(self.ROOT_DIR, 'config/')
         self.DATA_DIR = os.path.join(self.ROOT_DIR, 'data/')

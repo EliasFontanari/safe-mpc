@@ -30,7 +30,7 @@ class NaiveController(AbstractController):
         self.u_guess = np.full((self.N, self.model.nu), u0)
         # Solve the OCP
         status = self.solve(x0)
-        if (status == 0 or status == 2) and self.checkGuess():
+        if (status == 0 or status==2) and self.checkGuess():
             self.x_guess = np.copy(self.x_temp)
             self.u_guess = np.copy(self.u_temp)
             return 1
@@ -170,20 +170,14 @@ class RecedingController(STWAController):
         r_new = -1
         for i in range(1, self.N + 1):
             if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
-                r_new = i - 1
+                r_new = i 
 
         if status == 0 and self.checkRunningConstraintsController(self.x_temp, self.u_temp) \
-            and r_new > 0 and self.simulator.checkSafeIntegrate(self.x_temp,self.u_temp,r_new+1)[0]:
+            and r_new > 1 and self.simulator.checkSafeIntegrate([x],self.u_temp,r_new)[0]:
+            
             self.fails = 0
             self.r = r_new
             self.step_old_solution = 0
-
-            # with open('/home/utente/Documents/Optim/mpc-dock-default2/safe-mpc/data/'+ 'constraint_violations/'+'integration.txt', 'a') as file:
-            #     file.write('SUCCESS\n')
-            #     file.write(f'residuals: {self.ocp_solver.get_residuals()}\n')
-            #     file.write(f'sqp_iter:{self.ocp_solver.get_stats("sqp_iter")}\n')
-            #     file.write(f'qp_iter:{self.ocp_solver.get_stats("qp_iter")}\n')
-            #     file.write(f'qp_stat:{self.ocp_solver.get_stats("qp_stat")}\n')
         else:
             if self.r == 1:
                 #self.x_viable = np.copy(self.x_guess[self.r])
@@ -191,10 +185,11 @@ class RecedingController(STWAController):
                 self.step_old_solution += 1
 
                 print("NOT SOLVED")
+                print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
+                
                 return None
             self.fails += 1
-            self.r -= 1
-            #self.guessCorrection()
+        self.r -= 1
         return self.provideControl()
     
 
@@ -264,12 +259,6 @@ class ParallelController(RecedingController):
             self.fails = 0
             self.safe_hor = n_step_safe
             self.x_viable = x_safe
-            with open('/home/utente/Documents/Optim/mpc-dock-default2/safe-mpc/data/'+ 'constraint_violations/'+'integration.txt', 'a') as file:
-                file.write('SUCCESS\n')
-                file.write(f'residuals: {self.ocp_solver.get_residuals()}\n')
-                file.write(f'sqp_iter:{self.ocp_solver.get_stats("sqp_iter")}\n')
-                file.write(f'qp_iter:{self.ocp_solver.get_stats("qp_iter")}\n')
-                file.write(f'qp_stat:{self.ocp_solver.get_stats("qp_stat")}\n')
             #self.guessCorrection()
             # for i in range(self.N):
             #     self.alternative_x_guess[i] = self.ocp_solver.get(i, "x")
@@ -492,44 +481,41 @@ class ParallelLimited(ParallelWithCheck):
                 self.constrains.append(self.N - j)
                 i +=1
             j +=1
-        self.constrains = sorted(self.constrains,reverse=True)
+        self.constrains = sorted(self.constrains)
 
     def uniform_constraint(self):
-        self.constrains=[]
-        self.constrains.append(self.safe_hor)
-        low_alloc = int((self.cores)*((self.safe_hor-1)/(self.N-1)))
-        high_alloc = int((self.cores)*((self.N-self.safe_hor)/(self.N-1)))
-        if low_alloc - high_alloc == 0 and low_alloc%2!=0:
-            #low_alloc -= 1
-            low_constr = np.linspace(1,self.safe_hor,low_alloc+1).round().astype(int)
-            high_constr = np.linspace(self.safe_hor,self.N,high_alloc+1).round().astype(int)
-            for i in range(low_alloc):
-                self.constrains.append(int(low_constr[i]))
-            for i in range(high_alloc):
-                self.constrains.append(int(high_constr[-1-i]))
-        elif low_alloc - high_alloc == 0 and low_alloc%2==0:
-            low_alloc -= 1
-            low_constr = np.linspace(1,self.safe_hor,low_alloc+1).round().astype(int)
-            high_constr = np.linspace(self.safe_hor,self.N,high_alloc+1).round().astype(int)
-            for i in range(low_alloc):
-                self.constrains.append(int(low_constr[i]))
-            for i in range(high_alloc):
-                self.constrains.append(int(high_constr[-1-i]))
+        step = (self.N-1)/self.cores
+        if self.safe_hor == 1 or self.safe_hor == self.N or (self.safe_hor-1)% step == 0:
+            self.constrains = np.linspace(1,self.N,self.cores).round().astype(int).tolist()
         else:
-            if high_alloc + low_alloc == self.cores and low_alloc == 0:
-                high_alloc -=1
-            elif high_alloc + low_alloc == self.cores and high_alloc == 0:
-                low_alloc -=1
-            low_constr = np.linspace(1,self.safe_hor,low_alloc+1).round().astype(int)
-            high_constr = np.linspace(self.safe_hor,self.N,high_alloc+1).round().astype(int)
-            for i in range(low_alloc):
-                self.constrains.append(int(low_constr[i]))
-            for i in range(high_alloc):
-                self.constrains.append(int(high_constr[-1-i]))
-        self.constrains = sorted(self.constrains,reverse=True)
+            if self.safe_hor < 1 + step:
+                self.constrains = np.linspace(self.safe_hor,self.N,self.cores).round().astype(int).tolist()
+            elif self.safe_hor >  self.N - step:
+                self.constrains = np.linspace(1,self.safe_hor,self.cores).round().astype(int).tolist()
+            else:
+                self.constrains=[] 
+                self.constrains.append(self.safe_hor)
+                portion_h = (self.cores-1)*((self.N - self.safe_hor)/(self.N-1))
+                portion_h = int(portion_h) if portion_h-int(portion_h)<=0.5 else int(portion_h+1)
+                portion_l = (self.cores-1)*((self.safe_hor-1)/(self.N-1))
+                portion_l = int(portion_l) if portion_l-int(portion_l)<=0.5 else int(portion_l+1)
+                if portion_h == portion_l and self.cores%2==0 or portion_h +portion_l < self.cores -1:
+                    # print(portion_h)
+                    # print(portion_l)
+                    self.constrains = np.linspace(1,round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
+                        + np.linspace(round(self.safe_hor+step),self.N,portion_h+1).round().astype(int).tolist()
+                else: 
+                    self.constrains = np.linspace(1,round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
+                        + np.linspace(round(self.safe_hor+step),self.N,portion_h).round().astype(int).tolist()
+            if not(len(self.constrains)==self.cores):
+                print(f'length = self.cores ? {len(self.constrains)==self.cores}')
+                print(f'self.cores = {self.cores}, self.safe_hor = {self.safe_hor}')
+                print(self.constrains)
+            if len(self.constrains) != len(set(self.constrains)):
+                print(f'repeated arguments ? {len(self.constrains) != len(set(self.constrains))}')
 
 
-    def CSI_distance_constraint(self):
+    def CIS_distance_constraint(self):
         self.constrains=[]
         self.constrains.append(self.safe_hor)
         distances=[]
@@ -544,7 +530,7 @@ class ParallelLimited(ParallelWithCheck):
                 self.constrains.append(indx_sorted[j]+1)
                 i+=1 
             j+=1
-        self.constrains = sorted(self.constrains,reverse=True)
+        self.constrains = sorted(self.constrains)
     
     def step(self,x):
         node_success = 0
@@ -554,7 +540,7 @@ class ParallelLimited(ParallelWithCheck):
             print('ERROR')
             print(self.constrains)
         for i in self.constrains:
-            result = self.sing_step(x,i)
+            result = self.sing_step(x,int(i))
             if result > node_success:
                 node_success = result
                 tmp_x = np.copy(self.x_temp)

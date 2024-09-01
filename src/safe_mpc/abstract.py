@@ -166,7 +166,7 @@ class AbstractController:
         self.simulator = simulator
         self.params = simulator.params
         self.model = simulator.model
-        self.err_thr=1
+        self.err_thr=1e-3
 
         self.N = int(self.params.T / self.params.dt)
         self.ocp = AcadosOcp()
@@ -372,12 +372,11 @@ class AbstractController:
             self.u_guess = np.roll(self.u_temp, -1, axis=0)
             if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
                 self.guessCorrection()
-
-        # Copy the last values
-        if self.params.cont_type != 'receding' or self.params.cont_type != 'parallel2' or self.params.cont_type != 'parallel_limited':
+                      
+        # Copy the last values        
+        if self.params.cont_type != 'receding' and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
             self.x_guess[-1] = np.copy(self.x_guess[-2])
         self.u_guess[-1] = np.copy(self.u_guess[-2])
-        #self.guessCorrection()
         return u
 
     def step(self, x0):
@@ -408,12 +407,13 @@ class AbstractController:
     #         self.x_guess[i+1]=self.simulator.simulate(self.x_guess[i],self.u_guess[i])
 
     def guessCorrection(self):
+        n = np.shape(self.u_guess)[0]
         error = 0
         x_corrected = np.copy(self.x_guess) 
         for i in range(len(self.u_guess)):
             x_corrected[i+1]=self.simulator.simulate(x_corrected[i],self.u_guess[i])
             error += np.linalg.norm(np.abs(self.x_guess[i+1]-x_corrected[i+1]))
-        if error > self.err_thr:
+        if np.linalg.norm(self.x_guess - x_corrected) > self.err_thr* np.sqrt(self.N+1):#error > self.err_thr:
             #print(error)
             self.x_guess = x_corrected
 
