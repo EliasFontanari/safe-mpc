@@ -1,7 +1,7 @@
 *.npy
 *.npz
 *.pkl
-*.png
+#*.png
 *.pdf
 *.zip
 generated/*

@@ -107,7 +107,7 @@ if __name__ == '__main__':
                              'parallel2': 'ParallelWithCheck',
                              'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
-    control = 'parallel2'
+    control = 'naive'
     # Define the configuration object, model, simulator
     conf = Parameters('triple_pendulum', control,rti=True)
     model = getattr(models,'TriplePendulumModel')(conf)

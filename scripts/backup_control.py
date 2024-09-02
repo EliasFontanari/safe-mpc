@@ -26,11 +26,11 @@ if __name__ == '__main__':
     
     
     control = 'abort'
-    abort = 'parallel_limited'
+    abort = 'parallel2'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'high'
-        cores = 16
+        mode = 'uni'
+        cores = 4
     
     # Define the configuration object, model, simulator and controller
     conf = Parameters('triple_pendulum', control,rti=False)
@@ -45,14 +45,14 @@ if __name__ == '__main__':
     folder_list = os.listdir(folder)
     viable = ''
     for i in folder_list:
-        if available_controllers[abort] in i and str(controller.params.alpha) in i \
+        if 'Thr'+str(controller.err_thr) in i and available_controllers[abort] in i and str(controller.params.alpha) in i \
             and str(conf.min_negative_jump) in i:
                 if abort == 'parallel_limited':
                     if 'cores'+str(cores) in i and mode in i:
-                        viable = i +'/'+i+'.npy'
+                        viable = i +'/'+i+'x_viable.npy'
                         break
                 else:
-                    viable = i +'/'+i+'.npy'
+                    viable = i +'/'+i+'x_viable.npy'
                     break
     print(i)
     

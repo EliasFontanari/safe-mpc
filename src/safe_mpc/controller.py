@@ -6,8 +6,6 @@ from .abstract import AbstractController
 class NaiveController(AbstractController):
     def __init__(self, simulator):
         super().__init__(simulator)
-        self.tol_array= np.ones(self.x_guess.shape)*0e-4
-        self.tol_array[0] = 0
 
     def checkGuess(self):
         return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
@@ -451,7 +449,7 @@ class ParallelLimited(ParallelWithCheck):
         super().__init__(simulator)
         self.cores = self.params.n_cores
         self.constrains = []
-        self.constraint_mode = self.CIS_distance_constraint
+        self.constraint_mode = self.uniform_constraint
 
     def high_nodes_constraint(self):
         self.constrains = []
