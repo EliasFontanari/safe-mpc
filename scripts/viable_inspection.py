@@ -67,11 +67,23 @@ if __name__ == '__main__':
     plt.plot(np.arange(n_a), x_viable[:,0],  marker='o', linestyle='', color='b', markersize=mark_size)
     plt.plot(np.arange(n_a), x_viable[:,1],  marker='o', linestyle='', color='r', markersize=mark_size)
     plt.plot(np.arange(n_a), x_viable[:,2],  marker='o', linestyle='', color='g', markersize=mark_size)
-    plt.xlabel('t')
     plt.legend(['x1','x2','x3'])
     plt.grid()
-    plt.axhline(y=model.x_min[0], color='r', linestyle='-')
-    plt.axhline(y=model.x_max[0], color='r', linestyle='-')
+    plt.axhline(y=model.x_min[0], color='purple', linestyle='-')
+    plt.axhline(y=model.x_max[0], color='purple', linestyle='-')
+    
+    plt.figure('Velocity viable, parallel')
+    plt.clf()
+    for j in range(n_a):
+        if not(model.checkStateConstraints(x_viable[j])):
+            print(j)
+    plt.plot(np.arange(n_a), x_viable[:,0+3],  marker='o', linestyle='', color='b', markersize=mark_size)
+    plt.plot(np.arange(n_a), x_viable[:,1+3],  marker='o', linestyle='', color='r', markersize=mark_size)
+    plt.plot(np.arange(n_a), x_viable[:,2+3],  marker='o', linestyle='', color='g', markersize=mark_size)
+    plt.legend(['dx1','dx2','dx3'])
+    plt.grid()
+    plt.axhline(y=model.x_min[4], color='purple', linestyle='-')
+    plt.axhline(y=model.x_max[4], color='purple', linestyle='-')
     
     
     abort = 'receding'
@@ -108,9 +120,22 @@ if __name__ == '__main__':
     plt.plot(np.arange(n_a), x_viable[:,0],  marker='o', linestyle='', color='b', markersize=mark_size)
     plt.plot(np.arange(n_a), x_viable[:,1],  marker='o', linestyle='', color='r', markersize=mark_size)
     plt.plot(np.arange(n_a), x_viable[:,2],  marker='o', linestyle='', color='g', markersize=mark_size)
-    plt.xlabel('t')
     plt.legend(['x1','x2','x3'])
     plt.grid()
-    plt.axhline(y=model.x_min[0], color='r', linestyle='-')
-    plt.axhline(y=model.x_max[0], color='r', linestyle='-')
+    plt.axhline(y=model.x_min[0], color='purple', linestyle='-')
+    plt.axhline(y=model.x_max[0], color='purple', linestyle='-')
+    
+    
+    plt.figure('Velocity viable, receding')
+    plt.clf()
+    for j in range(n_a):
+        if not(model.checkStateConstraints(x_viable[j])):
+            print(j)
+    plt.plot(np.arange(n_a), x_viable[:,0+3],  marker='o', linestyle='', color='b', markersize=mark_size)
+    plt.plot(np.arange(n_a), x_viable[:,1+3],  marker='o', linestyle='', color='r', markersize=mark_size)
+    plt.plot(np.arange(n_a), x_viable[:,2+3],  marker='o', linestyle='', color='g', markersize=mark_size)
+    plt.legend(['dx1','dx2','dx3'])
+    plt.grid()
+    plt.axhline(y=model.x_min[4], color='purple', linestyle='-')
+    plt.axhline(y=model.x_max[4], color='purple', linestyle='-')
     plt.show()
