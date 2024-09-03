@@ -54,7 +54,7 @@ def init_search():
 if __name__ == '__main__':
     print(f'Available cores: {os.cpu_count()}')
     length = 500
-    bins = 5 
+    bins = 10
      
     lock =  multiprocessing.Lock() 
     manager = multiprocessing.Manager()
@@ -80,7 +80,6 @@ if __name__ == '__main__':
     if not os.path.exists(conf.DATA_DIR):
         os.makedirs(conf.DATA_DIR)
     #data_name = conf.DATA_DIR + args['controller'] + '_'
-    bins = 10
     x0_0_intervals = np.linspace(model.x_min[0],model.x_max[0],bins+1)
 
     x_init_vec, x_guess_vec, u_guess_vec = manager.list(), manager.list(), manager.list()

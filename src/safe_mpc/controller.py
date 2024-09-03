@@ -449,7 +449,7 @@ class ParallelLimited(ParallelWithCheck):
         super().__init__(simulator)
         self.cores = self.params.n_cores
         self.constrains = []
-        self.constraint_mode = self.uniform_constraint
+        self.constraint_mode = self.CIS_distance_constraint
 
     def high_nodes_constraint(self):
         self.constrains = []

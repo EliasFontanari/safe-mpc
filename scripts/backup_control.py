@@ -11,6 +11,14 @@ from acados_template import AcadosOcpSolver
 from datetime import datetime
 import matplotlib.pyplot as plt
 
+def bounds_dist(x):
+    x0_b = model.x_min[0] if np.abs(x[0]-model.x_min[0]) < np.abs(x[0]-model.x_max[0]) else model.x_max[0] 
+    x1_b = model.x_min[1] if np.abs(x[1]-model.x_min[1]) < np.abs(x[1]-model.x_max[1]) else model.x_max[1]
+    x2_b = model.x_min[2] if np.abs(x[2]-model.x_min[2]) < np.abs(x[2]-model.x_max[2]) else model.x_max[2] 
+    
+     
+    return min(np.abs(x[0]-x0_b),np.abs(x[1]-x1_b),np.abs(x[2]-x2_b))
+    #return np.linalg.norm(np.array([x[0]-x0_b,x[1]-x1_b,x[2]-x2_b]))
 
 if __name__ == '__main__':
     available_controllers = {'naive': 'NaiveController',
@@ -26,11 +34,11 @@ if __name__ == '__main__':
     
     
     control = 'abort'
-    abort = 'parallel2'
+    abort = 'parallel_limited'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'uni'
-        cores = 4
+        mode = 'CIS'
+        cores = 8
     
     # Define the configuration object, model, simulator and controller
     conf = Parameters('triple_pendulum', control,rti=False)
@@ -39,7 +47,7 @@ if __name__ == '__main__':
     simulator = SimDynamics(model)
     
     controller = getattr(controllers, available_controllers[control])(simulator)
-    controller.setReference(model.x_ref)
+    #controller.setReference(model.x_ref)
 
     folder = os.path.join(conf.ROOT_DIR,'DATI_PARALLELIZED')
     folder_list = os.listdir(folder)
@@ -59,14 +67,16 @@ if __name__ == '__main__':
 
 
     tgrid = np.linspace(0,conf.T,int(conf.T/conf.dt)+1)
+    failed =[]
     
     x_viable = np.load(os.path.join(folder,viable)) 
     n_a = np.shape(x_viable)[0]
     rep = 1
     t_rep = np.empty((n_a, rep)) * np.nan
     controller.model.setNNmodel()
+    closeness_success,closeness_failed = [],[]
     for i in range(n_a):
-        print(f'{i} x_viable={x_viable[i]} \n\n\n\n\n')
+        print(f'{i} x_viable={x_viable[i]} \n')
         #controller.reinit_solver()
         #controller.ocp_solver.reset()
         # Repeat each test rep times
@@ -92,6 +102,9 @@ if __name__ == '__main__':
                     if controller.model.checkStateConstraints(integrated_sol) and (np.abs(integrated_sol[-1,3:])<1e-3).all():
                         t_rep[i, j] = controller.ocp_solver.get_stats('time_tot')
                         print('SUCCESS')
+                        print(f'closeness :{bounds_dist(x_viable[i])}')
+                        closeness_success.append(bounds_dist(x_viable[i]))
+
                     if False:
                         plt.figure(f'Position,problem {i}, status {status}')
                         plt.title(f'Position,problem {i}, status {status}')
@@ -125,6 +138,12 @@ if __name__ == '__main__':
                         plt.grid()
                         plt.show()
                     print(integrated_sol[-1][3:])
+                    
+                    
+            else: 
+                failed.append(i)
+                print(f'closeness :{bounds_dist(x_viable[i])}')
+                closeness_failed.append(bounds_dist(x_viable[i]))
 
                 
 
@@ -134,3 +153,21 @@ if __name__ == '__main__':
     t_min = t_min[~np.isnan(t_min)]
     print('Controller: %s\nAbort: %d over %d\nQuantile (99) time: %.3f'
             % (abort, len(t_min), n_a, 0))
+    print(failed)
+    
+    
+    closeness_failed=np.array(closeness_failed)
+    closeness_success=np.array(closeness_success)
+    
+    
+    plt.figure()
+    plt.hist(closeness_success[closeness_success<100],density=False,bins=50,color='blue', edgecolor='black', alpha=.5)
+    plt.hist(closeness_failed[closeness_failed<100] ,density=False,bins=50,color='yellow', edgecolor='black', alpha=.5)
+    
+ 
+    # Adding labels and title
+    plt.xlabel('Values')
+    plt.ylabel('Frequency')
+    plt.title('Successes vs fails closeness to bounds viable states')
+    
+    plt.show()
