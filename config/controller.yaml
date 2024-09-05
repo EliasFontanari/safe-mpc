@@ -10,7 +10,7 @@ solver_mode: 'BALANCE'    # HPIPM mode, can be --> 'BALANCE', 'ROBUST', 'SPEED',
 alpha: 15
 conv_tol: 1e-3            # convergence tolerance for the task
 
-min_negative_jump: -1
+min_negative_jump: 0
 traj_err_threshold: 1e-3
 bounds_tolerance: 5e-4
 
@@ -55,7 +55,7 @@ parallel_limited:
   T: 0.175
   ws_r: 1e4
   ws_t: 1e4
-  n_cores: 8
+  n_cores: 4
 
 parallel_receding:
   dt: 5e-3

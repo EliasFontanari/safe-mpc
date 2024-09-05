@@ -42,9 +42,7 @@ def bounds_dist(x):
     x1_b = model.x_min[1] if np.abs(x[1]-model.x_min[1]) < np.abs(x[1]-model.x_max[1]) else model.x_max[1]
     x2_b = model.x_min[2] if np.abs(x[2]-model.x_min[2]) < np.abs(x[2]-model.x_max[2]) else model.x_max[2] 
     
-     
-    
-    return np.linalg.norm(np.array([x[0]-x0_b,x[1]-x1_b,x[2]-x2_b]))
+    return np.linalg.norm(np.array([x[0]-x0_b,0.5*(x[1]-x1_b),0.2*(x[2]-x2_b)]))
 
 if __name__ == '__main__':
     conf = Parameters('triple_pendulum', 'receding',rti=True)
@@ -52,8 +50,10 @@ if __name__ == '__main__':
     simulator = SimDynamics(model)
     model.setNNmodel()
     # Data content :  k, convergence, x_sim, stats, x_v, u,x_simu,u_simu,jumps,safe_hor_hist,core_sol
-    data_par = load_data('ParallelWithCheck',2,-1,1e-3,'uni',16) 
-    data_rec = load_data('Receding',2,-1,1e-3,'high',16)
+    dataset1 = 'ParallelWithCheck'
+    dataset2 = 'ParallelLimited'
+    data_par = load_data(dataset1,2,0,1e-3,'uni',16) 
+    data_rec = load_data(dataset2,2,0,1e-3,'high',16)
 
     x_v_par,x_v_rec=[],[]
     x_v_par_val,x_v_rec_val = [],[] 
@@ -86,32 +86,36 @@ if __name__ == '__main__':
     # Adding labels and title
     plt.xlabel('Values')
     plt.ylabel('Frequency')
-    plt.title('Parallel vs receding viable distribution')
-    
+    plt.title(f'{dataset1} vs  {dataset2} viable distribution')
+    plt.legend([dataset1, dataset2])
+
+
     # Display the plot
     plt.show()
     
     plt.figure()
-    plt.hist(x_v_par_bounds_dist,density=False,color='blue', edgecolor='black', alpha=.5)
-    plt.hist(x_v_rec_bounds_dist ,density=False,color='yellow', edgecolor='black', alpha=.5)
-    
+    plt.hist(x_v_par_bounds_dist,density=False,bins=30,color='blue', edgecolor='black', alpha=.5)
+    plt.hist(x_v_rec_bounds_dist ,density=False,bins=30,color='yellow', edgecolor='black', alpha=.5)
+    plt.legend([dataset1, dataset2])
  
     # Adding labels and title
     plt.xlabel('Values')
     plt.ylabel('Frequency')
-    plt.title('Parallel vs receding closeness to bounds viable states')
+    plt.title(f'{dataset1} vs  {dataset2} closeness to bounds viable states')
     
     # Display the plot
     plt.show()
     x_v_par_bounds_dist = np.array(x_v_par_bounds_dist)
     x_v_rec_bounds_dist = np.array(x_v_rec_bounds_dist)
+    print(f'mean closeness index for parallell: {np.mean(x_v_par_bounds_dist)}')
+    print(f'mean closeness index for receding: {np.mean(x_v_rec_bounds_dist)}')
     print(f'percentage of problems under 0.23 for parallell: {x_v_par_bounds_dist[x_v_par_bounds_dist<0.23].size/len(x_v_par_bounds_dist)}')
     print(f'percentage of problems under 0.23 for receding: {x_v_rec_bounds_dist[x_v_rec_bounds_dist<0.23].size/len(x_v_rec_bounds_dist)}')
     
     
     # convergence value for the trajectory and the viable states
-    data_par = load_data('ParallelWithCheck',2,-1,1e-3,'uni',16) 
-    data_high4 = load_data('Receding',2,-1,1e-3,'high',16)
+    data_par = load_data(dataset1,2,-1,1e-3,'uni',16) 
+    data_high4 = load_data(dataset2,2,-1,1e-3,'high',4)
     x_v_par,x_v_high=[],[]
     x_val_par_min_traj,x_val_high_min_traj = [],[] 
     x_val_par_end_traj,x_val_high_end_traj = [],[] 
@@ -127,28 +131,30 @@ if __name__ == '__main__':
     
     
     plt.figure()
-    plt.hist(x_val_par_min_traj,density=False,color='blue', edgecolor='black', alpha=.5)
-    plt.hist(x_val_high_min_traj,density=False,color='yellow', edgecolor='black', alpha=.5)
+    plt.hist(x_val_par_min_traj,density=True,color='blue', edgecolor='black', alpha=.5)
+    plt.hist(x_val_high_min_traj,density=True,color='yellow', edgecolor='black', alpha=.5)
     
  
     # Adding labels and title
     plt.xlabel('Values')
     plt.ylabel('Frequency')
-    plt.title('Parallel vs HIGH4 minimum convergence value')
+    plt.title(f'{dataset1} vs  {dataset2} minimum convergence value')
+    plt.legend([dataset1, dataset2])
     
     # Display the plot
     plt.show()
     
     
     plt.figure()
-    plt.hist(x_val_par_end_traj,density=density,color='blue', edgecolor='black', alpha=.5)
-    plt.hist(x_val_high_end_traj,density=density,color='yellow', edgecolor='black', alpha=.5)
+    plt.hist(x_val_par_end_traj,density=False,color='blue', edgecolor='black', alpha=.5)
+    plt.hist(x_val_high_end_traj,density=False,color='yellow', edgecolor='black', alpha=.5)
     
  
     # Adding labels and title
     plt.xlabel('Values')
     plt.ylabel('Frequency')
-    plt.title('Parallel vs HIGH4 end convergence value')
+    plt.title(f'{dataset1} vs  {dataset2} end convergence value')
+    plt.legend([dataset1, dataset2])
     
     # Display the plot
     plt.show()

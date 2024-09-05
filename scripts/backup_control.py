@@ -12,13 +12,20 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 
 def bounds_dist(x):
+    # x0_b = [model.x_min[0],1] if np.abs(x[0]-model.x_min[0]) < np.abs(x[0]-model.x_max[0]) else [model.x_max[0],-1] 
+    # x1_b = [model.x_min[1],1] if np.abs(x[1]-model.x_min[1]) < np.abs(x[1]-model.x_max[1]) else [model.x_max[1],-1]
+    # x2_b = [model.x_min[2],1] if np.abs(x[2]-model.x_min[2]) < np.abs(x[2]-model.x_max[2]) else [model.x_max[2],-1] 
+    
     x0_b = model.x_min[0] if np.abs(x[0]-model.x_min[0]) < np.abs(x[0]-model.x_max[0]) else model.x_max[0] 
     x1_b = model.x_min[1] if np.abs(x[1]-model.x_min[1]) < np.abs(x[1]-model.x_max[1]) else model.x_max[1]
-    x2_b = model.x_min[2] if np.abs(x[2]-model.x_min[2]) < np.abs(x[2]-model.x_max[2]) else model.x_max[2] 
+    x2_b = model.x_min[2] if np.abs(x[2]-model.x_min[2]) < np.abs(x[2]-model.x_max[2]) else model.x_max[2]
+    #return min(np.abs(x[0]-x0_b),np.abs(x[1]-x1_b),np.abs(x[2]-x2_b))
+    # return np.linalg.norm(np.array([np.abs(x[0]-x0_b[0])+x[3]/(10*(np.abs(x[0]-model.x_max[0])))\
+    #     ,np.abs(x[1]-x1_b[1])+x[4]/(10*(np.abs(x[1]-model.x_max[1]))),\
+    #     np.abs(x[2]-x2_b[0])+x[5]/(10*(np.abs(x[2]-model.x_max[2])))]))
+    #return np.abs(x[0]-model.x_max[0]) - x[3]/ 10*np.abs(x[0]-model.x_max[0]) 
+    return np.linalg.norm(np.array([x[0]-x0_b,0.5*(x[1]-x1_b),0.2*(x[2]-x2_b)]))
     
-     
-    return min(np.abs(x[0]-x0_b),np.abs(x[1]-x1_b),np.abs(x[2]-x2_b))
-    #return np.linalg.norm(np.array([x[0]-x0_b,x[1]-x1_b,x[2]-x2_b]))
 
 if __name__ == '__main__':
     available_controllers = {'naive': 'NaiveController',
@@ -38,7 +45,8 @@ if __name__ == '__main__':
     if abort == 'parallel_limited':
         # mode CIS, uni or high
         mode = 'CIS'
-        cores = 8
+        cores = 16
+    min_jump = 0
     
     # Define the configuration object, model, simulator and controller
     conf = Parameters('triple_pendulum', control,rti=False)
@@ -54,7 +62,7 @@ if __name__ == '__main__':
     viable = ''
     for i in folder_list:
         if 'Thr'+str(controller.err_thr) in i and available_controllers[abort] in i and str(controller.params.alpha) in i \
-            and str(conf.min_negative_jump) in i:
+            and 'Jump'+str(min_jump) in i:
                 if abort == 'parallel_limited':
                     if 'cores'+str(cores) in i and mode in i:
                         viable = i +'/'+i+'x_viable.npy'
@@ -93,6 +101,7 @@ if __name__ == '__main__':
                 {controller.ocp_solver.get_stats('qp_stat')}")
             if status == 0 or status==2:
                 print(status)
+                print(f'closeness :{bounds_dist(x_viable[i])}')
                 if (np.abs(controller.x_temp[-1][3:]) < 1e-2).all():
                     
                     integrated_sol=x_viable[i].reshape(1,-1) 
@@ -161,8 +170,8 @@ if __name__ == '__main__':
     
     
     plt.figure()
-    plt.hist(closeness_success[closeness_success<100],density=False,bins=50,color='blue', edgecolor='black', alpha=.5)
-    plt.hist(closeness_failed[closeness_failed<100] ,density=False,bins=50,color='yellow', edgecolor='black', alpha=.5)
+    plt.hist(closeness_success[closeness_success<100],density=False,bins=20,color='blue', edgecolor='black', alpha=.5)
+    plt.hist(closeness_failed[closeness_failed<100] ,density=False,bins=20,color='yellow', edgecolor='black', alpha=.5)
     
  
     # Adding labels and title
@@ -171,3 +180,4 @@ if __name__ == '__main__':
     plt.title('Successes vs fails closeness to bounds viable states')
     
     plt.show()
+    print(f'Mean of closeness : {np.mean(np.hstack((closeness_failed,closeness_success)))}')

@@ -36,17 +36,19 @@ def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
 
 
 if __name__ == '__main__':
-    data_par = load_data('ParallelWithCheck',2,-1,1e-3) 
-    data_high = load_data('ParallelLimited',2,-1,1e-3,'high',16)
+    data_par = load_data('ParallelWithCheck',10,-1,1e-3) 
+    data_high = load_data('ParallelLimited',10,-1,1e-3,'high',16)
 
     hor_par,hor_high=[],[]
     for i in range(len(data_par)):
         for j in range(len(data_par)):
             if (data_par[i][2][0]==data_high[j][2][0]).all(): 
-                if data_par[i][1]==1 and data_high[j][1]==0: 
+                if data_par[i][1]==0 and data_high[j][1]==1: 
                     print(f'x0:{data_par[i][2][0]}, par {data_par[i][1]}, high {data_high[j][1]}')
                     hor_par.append(data_par[i][9])
-                    hor_high.append(data_high[j][9])    
+                    hor_high.append(data_high[j][9])  
+                    print(i)
+                    print(j) 
     print(len(hor_par))
     
     for i in range(len(hor_par)):

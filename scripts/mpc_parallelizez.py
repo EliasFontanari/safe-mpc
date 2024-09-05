@@ -19,7 +19,7 @@ def convergenceCriteria(x, mask=None):
 
 def simulate_mpc(x0_g,x_guess,u_guess):
     x0 = np.zeros((model.nx,))
-    x0[:model.nq] = x0_g
+    x0[:model.nq] = x0_g 
 
     x_sim = np.empty((conf.n_steps + 1, model.nx)) * np.nan
     u = np.empty((conf.n_steps, model.nu)) * np.nan
@@ -30,7 +30,6 @@ def simulate_mpc(x0_g,x_guess,u_guess):
         controller.safe_hor = controller.N
     elif control == 'receding':
         controller.r=controller.N
-    controller.ocp_solver.update_qp_solver_cond_N
     controller.fails = 0
     stats = []
     x_simu = []
@@ -62,8 +61,7 @@ def simulate_mpc(x0_g,x_guess,u_guess):
             safe = controller.safe_hor
             safe_hor_hist.append(safe)
             jumps.append(jump)
-            if controller.core_solution != None:
-                core_sol.append(controller.core_solution)
+            core_sol.append(controller.core_solution)
         elif control == 'receding':
             jump = controller.r - safe
             safe = controller.r
@@ -140,7 +138,7 @@ if __name__ == '__main__':
     controller.solve(np.zeros(6))
     print('\n\n\n Starting simulation \n\n\n')
     
-    n_processes = 12
+    n_processes = 1
 
     with multiprocessing.Pool(processes=n_processes) as pool:
         # Use starmap to apply the process_data function to the list of tuples

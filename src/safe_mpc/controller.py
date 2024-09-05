@@ -386,7 +386,6 @@ class ParallelWithCheck(RecedingController):
 
 
     def sing_step(self, x, n_constr):
-        r=0
         success = False
         self.constrain_n(n_constr)
         status = self.solve(x,[n_constr])
@@ -416,14 +415,16 @@ class ParallelWithCheck(RecedingController):
 
     def step(self,x):
         node_success = 0
+        core = None
         for i in range(1,self.N+1):
             result = self.sing_step(x,i)
             if result > node_success:
+                core = i
                 node_success = result
                 tmp_x = np.copy(self.x_temp)
                 tmp_u = np.copy(self.u_temp)
         if node_success > 1:
-            self.core_solution = node_success
+            self.core_solution = core
             self.step_old_solution = 0
             self.safe_hor = node_success
             self.x_temp = tmp_x
@@ -513,6 +514,7 @@ class ParallelLimited(ParallelWithCheck):
     
     def step(self,x):
         node_success = 0
+        core = None
         self.constraint_mode()
         if len(self.constrains) != self.cores or len(self.constrains) != len(set(self.constrains)):
             print(self.safe_hor)
@@ -521,11 +523,12 @@ class ParallelLimited(ParallelWithCheck):
         for i in self.constrains:
             result = self.sing_step(x,int(i))
             if result > node_success:
+                core = i
                 node_success = result
                 tmp_x = np.copy(self.x_temp)
                 tmp_u = np.copy(self.u_temp)
         if node_success > 1:
-            self.core_solution = node_success
+            self.core_solution = core
             self.step_old_solution = 0
             self.safe_hor = node_success
             self.x_temp = tmp_x

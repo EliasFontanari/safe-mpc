@@ -18,7 +18,11 @@ def bounds_dist(x):
     
      
     #return min(np.abs(x[0]-x0_b),np.abs(x[1]-x1_b),np.abs(x[2]-x2_b))
-    return np.linalg.norm(np.array([x[0]-x0_b,x[1]-x1_b,x[2]-x2_b]))
+    #return np.linalg.norm(np.array([x[0]-x0_b,x[1]-x1_b,x[2]-x2_b]))
+    #return np.abs(x[0]-x0_b)
+    return np.abs(x[0]-model.x_max[0]) - x[3] if np.abs(x[0]-model.x_max[0]) < 0.2 else np.abs(x[0]-model.x_max[0]) 
+    
+
 if __name__ == '__main__':
     # Define the configuration object, model, simulator and controller
     conf = Parameters('triple_pendulum', 'abort',rti=False)
@@ -35,12 +39,13 @@ if __name__ == '__main__':
     tests=100
     successes=0
     for i in range(tests):
-        while True:
-            x0[:model.nq] =  (model.x_max-model.x_min)[0]*np.random.random_sample((3,)) + model.x_min[0]*np.ones((3,))
-            x0[model.nq:] =  (model.x_max-model.x_min)[-1]*np.random.random_sample((3,)) + model.x_min[-1]*np.ones((3,))
-            if 0.5>controller.model.nn_func(x0, controller.model.params.alpha) >0:     
-                if bounds_dist(x0)<0.1:
-                    break
+        # while True:
+        #     x0[:model.nq] =  (model.x_max-model.x_min)[0]*np.random.random_sample((3,)) + model.x_min[0]*np.ones((3,))
+        #     x0[model.nq:] =  (model.x_max-model.x_min)[-1]*np.random.random_sample((3,)) + model.x_min[-1]*np.ones((3,))
+        #     if 0.5>controller.model.nn_func(x0, controller.model.params.alpha) >0:     
+        #         if bounds_dist(x0)<0.:
+        #             break
+        x0=np.array([3.8769749  , 3.19882331 , 3.92699066 ,-0.24508955  ,4.53448823  ,0.52764162])
         print(x0)
         print(bounds_dist(x0))
         print(controller.model.nn_func(x0, controller.model.params.alpha) )

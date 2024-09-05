@@ -17,4 +17,4 @@ data (copy)2/*
 dataold/
 dataclean/
 data2/
-
+scripts/backup_random.py

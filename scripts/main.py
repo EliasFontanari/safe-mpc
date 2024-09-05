@@ -113,13 +113,13 @@ def simulate_mpc(p):
         #     file.write(f'qp_iter:{controller.ocp_solver.get_stats("qp_iter")}\n')
         #     file.write(f'qp_stat:{controller.ocp_solver.get_stats("qp_stat")}\n')
 
-        if not controller.checkStateConstraintsController(x_sim[k + 1]):
-            violation_max = (x_sim[k+1]>controller.model.x_max)
-            violation_min = (x_sim[k+1]<controller.model.x_min)
-            # for i in range(violation_max.shape[0]):
-            #     if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
-            #         if violation_max[i]: print(f'no tol upper bounds violated of : {x_sim[k+1][i]-controller.model.x_max[i]}, safe_hor = {controller.safe_hor}, state={i}\n')
-            #         if violation_min[i]: print(f'no tol lower bounds violated of : {-x_sim[k+1][i]+controller.model.x_min[i]}, safe_hor = {controller.safe_hor}, state ={i}\n')
+        # if not controller.checkStateConstraintsController(x_sim[k + 1]):
+        #     violation_max = (x_sim[k+1]>controller.model.x_max)
+        #     violation_min = (x_sim[k+1]<controller.model.x_min)
+        #     # for i in range(violation_max.shape[0]):
+        #     #     if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
+        #     #         if violation_max[i]: print(f'no tol upper bounds violated of : {x_sim[k+1][i]-controller.model.x_max[i]}, safe_hor = {controller.safe_hor}, state={i}\n')
+        #     #         if violation_min[i]: print(f'no tol lower bounds violated of : {-x_sim[k+1][i]+controller.model.x_min[i]}, safe_hor = {controller.safe_hor}, state ={i}\n')
         if not model.checkStateConstraints(x_sim[k + 1]):
             if args['controller'] == 'receding':
                 print(controller.r)
