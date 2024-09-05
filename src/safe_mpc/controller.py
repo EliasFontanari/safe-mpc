@@ -291,7 +291,7 @@ class ParallelLimited(ParallelWithCheck):
                 portion_l = (self.cores-1)*((self.safe_hor-1)/(self.N-1))
                 portion_l = int(portion_l) if portion_l-int(portion_l)<=0.5 else int(portion_l+1)
                 if portion_h == portion_l and self.cores%2==0 or portion_h +portion_l < self.cores -1:
-                    self.constrains = np.linspace(1,round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
+                    self.constrains = np.linspace(int(max(1,round(self.safe_hor-portion_l*step))),round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
                         + np.linspace(round(self.safe_hor+step),self.N,portion_h+1).round().astype(int).tolist()
                 else: 
                     constrains_l = []
@@ -333,10 +333,10 @@ class ParallelLimited(ParallelWithCheck):
         self.constraint_mode()
         if len(self.constrains) != self.cores or len(self.constrains) != len(set(self.constrains)):
             print(self.safe_hor)
-            print('ERROR')
+            print('ERROR\n\n\n\n\n\n')
             print(self.constrains)
         if not(self.safe_hor in self.constrains):
-            print('ERROR NOT PRESENT R')
+            print('ERROR NOT PRESENT R\n\n\n\n\n\n')
         for i in self.constrains:
             result = self.sing_step(x,int(i))
             if result > node_success:
