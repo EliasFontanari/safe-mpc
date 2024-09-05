@@ -44,8 +44,8 @@ if __name__ == '__main__':
     abort = 'parallel_limited'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'CIS'
-        cores = 16
+        mode = 'uni'
+        cores = 4
     min_jump = 0
     
     # Define the configuration object, model, simulator and controller

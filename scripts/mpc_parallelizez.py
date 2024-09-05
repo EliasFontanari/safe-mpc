@@ -138,7 +138,7 @@ if __name__ == '__main__':
     controller.solve(np.zeros(6))
     print('\n\n\n Starting simulation \n\n\n')
     
-    n_processes = 1
+    n_processes = 12
 
     with multiprocessing.Pool(processes=n_processes) as pool:
         # Use starmap to apply the process_data function to the list of tuples
