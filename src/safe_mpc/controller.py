@@ -275,41 +275,47 @@ class ParallelLimited(ParallelWithCheck):
         self.constrains = sorted(self.constrains)
 
     def uniform_constraint(self):
-        step = (self.N-1)/self.cores
-        if self.safe_hor == 1 or self.safe_hor == self.N:
-            self.constrains = np.linspace(1,self.N,self.cores).round().astype(int).tolist()
-        else:
-            if self.safe_hor < 1 + step:
-                self.constrains = np.linspace(self.safe_hor,self.N,self.cores).round().astype(int).tolist()
-            elif self.safe_hor >  self.N - step:
-                self.constrains = np.linspace(1,self.safe_hor,self.cores).round().astype(int).tolist()
+        if self.cores == self.N:
+            self.constrains = np.linspace(1,self.N,self.cores).round().astype(int).tolist()    
+        else: 
+            self.constrains = []
+            step = (self.N-1)/self.cores
+            if self.safe_hor == 1 or self.safe_hor == self.N:
+                self.constrains = np.linspace(1,self.N,self.cores).round().astype(int).tolist()
             else:
-                self.constrains=[] 
-                self.constrains.append(self.safe_hor)
-                portion_h = (self.cores-1)*((self.N - self.safe_hor)/(self.N-1))
-                portion_h = int(portion_h) if portion_h-int(portion_h)<=0.5 else int(portion_h+1)
-                portion_l = (self.cores-1)*((self.safe_hor-1)/(self.N-1))
-                portion_l = int(portion_l) if portion_l-int(portion_l)<=0.5 else int(portion_l+1)
-                if portion_h == portion_l and self.cores%2==0 or portion_h +portion_l < self.cores -1:
-                    self.constrains = np.linspace(int(max(1,round(self.safe_hor-portion_l*step))),round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
-                        + np.linspace(round(self.safe_hor+step),self.N,portion_h+1).round().astype(int).tolist()
-                else: 
-                    constrains_l = []
-                    constrains_h = []
-                    i,j=1,1
-                    while i < portion_l+1:
-                        constrains_l.insert(0,int(max(1,round(self.safe_hor - i*step))))
+                if self.safe_hor < 1 + step:
+                    i=1
+                    self.constrains.append(self.safe_hor)
+                    while i < self.cores:
+                        self.constrains.append(int(min(self.N,round(self.safe_hor + i*step))))
                         i+=1
-                    while j < portion_h+1:
-                        constrains_h.append(int(min(self.N,round(self.safe_hor + j*step)))) 
-                        j+=1
-                    self.constrains = np.array(constrains_l+self.constrains+constrains_h).round().astype(int).tolist()
-            if not(len(self.constrains)==self.cores):
-                print(f'length = self.cores ? {len(self.constrains)==self.cores}')
-                print(f'self.cores = {self.cores}, self.safe_hor = {self.safe_hor}')
-                print(self.constrains)
-            if len(self.constrains) != len(set(self.constrains)):
-                print(f'repeated arguments ? {len(self.constrains) != len(set(self.constrains))}')
+                elif self.safe_hor >  self.N - step:
+                    i=1
+                    self.constrains.append(self.safe_hor)
+                    while i < self.cores:                        
+                        self.constrains.insert(0,int(max(1,round(self.safe_hor - i*step))))
+                        i+=1
+                else:
+                    self.constrains=[] 
+                    self.constrains.append(self.safe_hor)
+                    portion_h = (self.cores-1)*((self.N - self.safe_hor)/(self.N-1))
+                    portion_h = int(portion_h) if portion_h-int(portion_h)<=0.5 else int(portion_h+1)
+                    portion_l = (self.cores-1)*((self.safe_hor-1)/(self.N-1))
+                    portion_l = int(portion_l) if portion_l-int(portion_l)<=0.5 else int(portion_l+1)
+                    if portion_h == portion_l and self.cores%2==0 or portion_h +portion_l < self.cores -1:
+                        self.constrains = np.linspace(int(max(1,round(self.safe_hor-portion_l*step))),round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
+                            + np.linspace(round(self.safe_hor+step),self.N,portion_h+1).round().astype(int).tolist()
+                    else: 
+                        self.constrains_l = []
+                        self.constrains_h = []
+                        i,j=1,1
+                        while i < portion_l+1:
+                            self.constrains_l.insert(0,int(max(1,round(self.safe_hor - i*step))))
+                            i+=1
+                        while j < portion_h+1:
+                            self.constrains_h.append(int(min(self.N,round(self.safe_hor + j*step)))) 
+                            j+=1
+                        self.constrains = self.constrains_l+self.constrains+self.constrains_h
 
 
     def CIS_distance_constraint(self):
