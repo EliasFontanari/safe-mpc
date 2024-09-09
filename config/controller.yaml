@@ -7,7 +7,7 @@ regenerate: true          # regenerate data
 nlp_max_iter: 100
 qp_max_iter: 100
 solver_mode: 'BALANCE'    # HPIPM mode, can be --> 'BALANCE', 'ROBUST', 'SPEED', 'SPEED_ABS'
-alpha: 2
+alpha: 10
 conv_tol: 1e-3            # convergence tolerance for the task
 
 min_negative_jump: 0
@@ -42,7 +42,7 @@ receding:
   dt: 5e-3
   T: 0.175
   ws_r: 1e4
-  ws_t: 1e4
+  ws_t: 1e2
 
 parallel:
   dt: 5e-3
@@ -55,7 +55,7 @@ parallel_limited:
   T: 0.175
   ws_r: 1e4
   ws_t: 1e4
-  n_cores: 4
+  n_cores: 35
 
 parallel_receding:
   dt: 5e-3

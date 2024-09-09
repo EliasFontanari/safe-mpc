@@ -41,11 +41,11 @@ if __name__ == '__main__':
     
     
     control = 'abort'
-    abort = 'parallel_limited'
+    abort = 'parallel2'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'uni'
-        cores = 4
+        mode = 'unif'
+        cores = 16
     min_jump = 0
     
     # Define the configuration object, model, simulator and controller
@@ -161,7 +161,7 @@ if __name__ == '__main__':
     # Remove the nan values (i.e. the initial conditions for which the controller failed)
     t_min = t_min[~np.isnan(t_min)]
     print('Controller: %s\nAbort: %d over %d\nQuantile (99) time: %.3f'
-            % (abort, len(t_min), n_a, 0))
+            % (abort, len(t_min), n_a, np.quantile(t_min, 0.99)))
     print(failed)
     
     

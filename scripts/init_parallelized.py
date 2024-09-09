@@ -61,7 +61,7 @@ if __name__ == '__main__':
     final_list = manager.list()
     j = manager.Value('i',0)
     found = manager.Value('i',0)
-    processes = 10
+    processes = 12
     jobs = []
 
     # Define the configuration object, model, simulator and controller

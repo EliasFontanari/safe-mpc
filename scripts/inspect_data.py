@@ -12,13 +12,17 @@ from acados_template import AcadosOcpSolver
 from datetime import datetime
 from scipy.stats import qmc
 import matplotlib.pyplot as plt
+import matplotlib as mpl
+import safe_mpc.plut as plut
+
+
 
 def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
     folder = os.path.join(os.getcwd(),'DATI_PARALLELIZED')
     files = os.listdir(folder)
     for i in files:
         if 'Thr'+str(err_thr) in i and control in i and str(alpha) in i \
-            and str(min_negative_jump) in i:
+            and 'Jump'+str(min_negative_jump) in i:
                 if control  == 'ParallelLimited':
                     if 'cores'+str(cores) in i and mode in i:
                         path = os.path.join(folder,i +'/'+i+'.pkl')
@@ -42,7 +46,9 @@ def bounds_dist(x):
     x1_b = model.x_min[1] if np.abs(x[1]-model.x_min[1]) < np.abs(x[1]-model.x_max[1]) else model.x_max[1]
     x2_b = model.x_min[2] if np.abs(x[2]-model.x_min[2]) < np.abs(x[2]-model.x_max[2]) else model.x_max[2] 
     
-    return np.linalg.norm(np.array([x[0]-x0_b,0.5*(x[1]-x1_b),0.2*(x[2]-x2_b)]))
+    #return np.linalg.norm(np.array([x[0]-x0_b,(x[1]-x1_b),(x[2]-x2_b)]))
+    return np.abs(x[0]-x0_b)
+
 
 if __name__ == '__main__':
     conf = Parameters('triple_pendulum', 'receding',rti=True)
@@ -51,7 +57,7 @@ if __name__ == '__main__':
     model.setNNmodel()
     # Data content :  k, convergence, x_sim, stats, x_v, u,x_simu,u_simu,jumps,safe_hor_hist,core_sol
     dataset1 = 'ParallelWithCheck'
-    dataset2 = 'ParallelLimited'
+    dataset2 = 'Receding'
     data_par = load_data(dataset1,2,0,1e-3,'uni',16) 
     data_rec = load_data(dataset2,2,0,1e-3,'high',16)
 
@@ -96,13 +102,17 @@ if __name__ == '__main__':
     plt.figure()
     plt.hist(x_v_par_bounds_dist,density=False,bins=30,color='blue', edgecolor='black', alpha=.5)
     plt.hist(x_v_rec_bounds_dist ,density=False,bins=30,color='yellow', edgecolor='black', alpha=.5)
-    plt.legend([dataset1, dataset2])
+    plt.legend(['Parallel', 'Receding'])
+    plt.xlabel('Values')
+    plt.ylabel('Frequency')
+    
+    
  
     # Adding labels and title
     plt.xlabel('Values')
     plt.ylabel('Frequency')
-    plt.title(f'{dataset1} vs  {dataset2} closeness to bounds viable states')
-    
+    #plt.title(f'{dataset1} vs  {dataset2} closeness to bounds viable states')
+    plt.savefig('receding_parallell_closenesess',dpi=300)
     # Display the plot
     plt.show()
     x_v_par_bounds_dist = np.array(x_v_par_bounds_dist)
@@ -114,8 +124,8 @@ if __name__ == '__main__':
     
     
     # convergence value for the trajectory and the viable states
-    data_par = load_data(dataset1,2,-1,1e-3,'uni',16) 
-    data_high4 = load_data(dataset2,2,-1,1e-3,'high',4)
+    data_par = load_data(dataset1,2,0,1e-3,'uni',16) 
+    data_high4 = load_data(dataset2,2,0,1e-3,'high',16)
     x_v_par,x_v_high=[],[]
     x_val_par_min_traj,x_val_high_min_traj = [],[] 
     x_val_par_end_traj,x_val_high_end_traj = [],[] 

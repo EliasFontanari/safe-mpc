@@ -46,7 +46,7 @@ model = getattr(models,'TriplePendulumModel')(conf)
 sampler = qmc.Halton(model.nq, scramble=False)
 l_bounds = model.x_min[:model.nq] + conf.state_tol
 u_bounds = model.x_max[:model.nq] - conf.state_tol
-x_viable = load_data('ParallelLimited',2,-1,1e-3,'high',16)
+x_viable = load_data('ParallelLimited',15,0,1e-3,'high',16)
 f_expl = model.f_expl
 opti = ca.Opti()
 model.setNNmodel()

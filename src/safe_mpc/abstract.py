@@ -75,7 +75,7 @@ class AbstractModel:
         return np.all(np.logical_and(x >= self.x_min-self.state_tol, x <= self.x_max+self.state_tol))
 
     def checkControlConstraints(self, u):
-        return np.all(np.logical_and(u >= self.u_min, u <= self.u_max))
+        return np.all(np.logical_and(u >= self.u_min-1e-4, u <= self.u_max+1e-4))
 
     def checkRunningConstraints(self, x, u):
         return self.checkStateConstraints(x) and self.checkControlConstraints(u)
@@ -181,9 +181,6 @@ class AbstractController:
         # Cost
         self.Q = 1e-4 * np.eye(self.model.nx)
         self.Q[0, 0] = 5e2
-        # self.Q[1,1] = 1e-4#0.65e2  #0.65
-        # self.Q[2,2] = 1e-4#0.65e2  #0.65
-        # self.Q[3,3] = 0.8e0#0.65e2  #0.65
         self.R = 1e-4 * np.eye(self.model.nu)
 
         self.ocp.cost.W = lin.block_diag(self.Q, self.R)
@@ -249,6 +246,7 @@ class AbstractController:
         self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
         self.ocp.code_export_directory = self.gen_name
         self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
+        #self.ocp_solver.store_iterate()
                
         #self.reinit_solver()
 

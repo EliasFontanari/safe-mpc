@@ -97,6 +97,7 @@ class RecedingController(STWAController):
         self.runningConstraint()
 
     def solve(self, x0,constr_nodes=None):
+        #self.ocp_solver.load_iterate('/home/utente/Documents/Optim/safe-mpc/triple_pendulum_iterate.json',verbose=False)
         # Reset current iterate
         self.ocp_solver.reset()
 
@@ -108,12 +109,14 @@ class RecedingController(STWAController):
         y_ref[:self.model.nx] = self.x_ref
         W = lin.block_diag(self.Q, self.R)
 
+        
         for i in range(self.N):
             self.ocp_solver.set(i, 'x', self.x_guess[i])
             self.ocp_solver.set(i, 'u', self.u_guess[i])
             self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
             self.ocp_solver.cost_set(i, 'W', W, api='new')
         self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
+        self.ocp_solver.set(0,'x',x0)
         self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
         self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
 
@@ -212,7 +215,7 @@ class ParallelWithCheck(RecedingController):
                 success = True
 
 
-        if success and success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
+        if success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
            (n_step_safe-self.safe_hor)>= self.min_negative_jump:
             
             success = True
@@ -245,12 +248,12 @@ class ParallelWithCheck(RecedingController):
             self.core_solution = None 
             self.step_old_solution +=1
             self.fails = 1
-        if self.safe_hor ==1:
-            print("NOT SOLVED")
-            _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
-            print(self.x_viable)
-            print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
-            return None
+            if self.safe_hor ==1:
+                print("NOT SOLVED")
+                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
+                print(self.x_viable)
+                print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
+                return None
         self.safe_hor -= 1
 
 
@@ -261,7 +264,7 @@ class ParallelLimited(ParallelWithCheck):
         super().__init__(simulator)
         self.cores = self.params.n_cores
         self.constrains = []
-        self.constraint_mode = self.uniform_constraint
+        self.constraint_mode = self.uniform_constraint                # choose mode
 
     def high_nodes_constraint(self):
         self.constrains = []
@@ -361,12 +364,12 @@ class ParallelLimited(ParallelWithCheck):
             self.core_solution = None 
             self.step_old_solution +=1
             self.fails = 1
-        if self.safe_hor ==1:
-            print("NOT SOLVED")
-            _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
-            print(self.x_viable)
-            print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
-            return None
+            if self.safe_hor ==1:
+                print("NOT SOLVED")
+                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
+                print(self.x_viable)
+                print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
+                return None
         self.safe_hor -= 1
 
 

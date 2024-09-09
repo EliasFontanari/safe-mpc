@@ -131,14 +131,24 @@ if __name__ == '__main__':
     x0_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
     x_guess_vec = np.load(data_name + f'x_guess_{conf.alpha}.npy')
     u_guess_vec = np.load(data_name + f'u_guess_{conf.alpha}.npy')
+    
+    
+        
+    
     guess_args = list(zip(x0_vec, x_guess_vec, u_guess_vec))
     length = x0_vec.shape[0]
     
     #simulate_mpc(*guess_args[7])
     controller.solve(np.zeros(6))
+    if control != 'naive':
+        for i in range(x_guess_vec.shape[0]):
+            if not(controller.model.checkSafeConstraints(x_guess_vec[i][-1])):
+                print(controller.model.checkSafeConstraints(x_guess_vec[i][-1]))
+            
     print('\n\n\n Starting simulation \n\n\n')
     
-    n_processes = 6
+    
+    n_processes = 8
 
     with multiprocessing.Pool(processes=n_processes) as pool:
         # Use starmap to apply the process_data function to the list of tuples

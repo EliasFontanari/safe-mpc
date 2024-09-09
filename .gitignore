@@ -1,7 +1,7 @@
 *.npy
 *.npz
 *.pkl
-#*.png
+*.png
 *.pdf
 *.zip
 generated/*
@@ -18,3 +18,6 @@ dataold/
 dataclean/
 data2/
 scripts/backup_random.py
+*.json
+src/safe_mpc/plut.py
+data (copy)/*

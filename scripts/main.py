@@ -42,7 +42,6 @@ def simulate_mpc(p):
         controller.alternative_u_guess = controller.u_guess
     if args['controller'] == 'receding':
         controller.r=controller.N
-    controller.ocp_solver.update_qp_solver_cond_N
     controller.fails = 0
     stats = []
     convergence = 0
@@ -58,6 +57,8 @@ def simulate_mpc(p):
     
     
     for k in range(conf.n_steps):        
+        if k ==54:
+            pass
         u[k] = controller.step(x_sim[k])
         stats.append(controller.getTime())
         simulator_state = controller.simulate_solver(x_sim[k], u[k])
@@ -170,7 +171,7 @@ if __name__ == '__main__':
                              'parallel2': 'ParallelWithCheck',
                              'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
-
+    args['rti'] = True
     if args['init_conditions']:
         args['controller'] = 'receding'
     # Check if the system and controller selected are available
@@ -312,7 +313,7 @@ if __name__ == '__main__':
         u_guess_vec = np.load(data_name + f'u_guess_{conf.alpha}.npy')
         res = []
         progress_bar = tqdm(total=conf.test_num, desc='Running on %d' %(conf.test_num))
-        for i in range(0,conf.test_num):
+        for i in range(53,conf.test_num):
             res.append(simulate_mpc(i))
             progress_bar.update(1)
         progress_bar.close()
