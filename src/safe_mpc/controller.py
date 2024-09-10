@@ -153,8 +153,8 @@ class RecedingController(STWAController):
         for i in range(1, self.N + 1):
             if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
                 r_new = i 
-
-        if status == 0 and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
+        #or(status==2 and self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp))
+        if (status == 0) and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
             and r_new > 1 and self.simulator.checkSafeIntegrate([x],self.u_temp,r_new)[0]:
             
             self.fails = 0
@@ -175,11 +175,12 @@ class RecedingController(STWAController):
         return self.provideControl()
     
 
-class ParallelWithCheck(RecedingController):
+class ParallelWithCheck(RecedingController):    
     def __init__(self, simulator):
         super().__init__(simulator)
         self.safe_hor = self.N
         self.core_solution=0
+        self.constrains =  np.linspace(1,self.N,self.N).round().astype(int).tolist()   
 
     def checkGuess(self):
         return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
@@ -206,8 +207,9 @@ class ParallelWithCheck(RecedingController):
         self.constrain_n(n_constr)
         status = self.solve(x,[n_constr])
         checked_r = self.check_safe_n()
-
-        if ((check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r > 1) and (status==0):
+        # or(status==2 and self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp))
+        if ((check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r > 1) \
+            and (status==0):
             constr_ver = n_constr if check else 0
             n_step_safe = max(checked_r,constr_ver)
             safe, x_safe = self.simulator.checkSafeIntegrate([x],self.u_temp,n_step_safe)
@@ -230,13 +232,15 @@ class ParallelWithCheck(RecedingController):
     def step(self,x):
         node_success = 0
         core = None
-        for i in range(1,self.N+1):
+        for i in reversed(self.constrains):
             result = self.sing_step(x,i)
             if result > node_success:
                 core = i
                 node_success = result
                 tmp_x = np.copy(self.x_temp)
                 tmp_u = np.copy(self.u_temp)
+                # if node_success > 1:
+                #     break
         if node_success > 1:
             self.core_solution = core
             self.step_old_solution = 0

@@ -105,9 +105,9 @@ if __name__ == '__main__':
                              'parallel2': 'ParallelWithCheck',
                              'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
-    control = 'parallel_limited'
+    control = 'parallel2'
     # Define the configuration object, model, simulator
-    conf = Parameters('triple_pendulum', control,rti=True)
+    conf = Parameters('triple_pendulum', control,rti=False)
     model = getattr(models,'TriplePendulumModel')(conf)
     simulator = SimDynamics(model)
     controller = getattr(controllers, available_controllers[control])(simulator)
@@ -148,7 +148,7 @@ if __name__ == '__main__':
     print('\n\n\n Starting simulation \n\n\n')
     
     
-    n_processes = 8
+    n_processes = 12
 
     with multiprocessing.Pool(processes=n_processes) as pool:
         # Use starmap to apply the process_data function to the list of tuples

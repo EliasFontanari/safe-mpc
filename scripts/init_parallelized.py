@@ -11,6 +11,7 @@ from safe_mpc.gravity_compensation import GravityCompensation
 from acados_template import AcadosOcpSolver
 from datetime import datetime
 from scipy.stats import qmc
+import time
 
 
 
@@ -61,7 +62,7 @@ if __name__ == '__main__':
     final_list = manager.list()
     j = manager.Value('i',0)
     found = manager.Value('i',0)
-    processes = 12
+    processes = 10
     jobs = []
 
     # Define the configuration object, model, simulator and controller
@@ -87,6 +88,7 @@ if __name__ == '__main__':
         p = multiprocessing.Process(target=init_search,args=())
         p.start()
         jobs.append(p)
+        time.sleep(4)
 
     while True:
         if len(x_guess_vec)>=length:

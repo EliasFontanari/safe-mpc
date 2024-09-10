@@ -223,10 +223,15 @@ class AbstractController:
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
         # self.ocp.solver_options.integrator_type = 'DISCRETE'
-        # self.ocp.solver_options.hessian_approx = 'EXACT'
+        #self.ocp.solver_options.hessian_approx = 'EXACT'
         #self.ocp.solver_options.qp_tol = 1e-3
 
-
+        #self.ocp.solver_options.tol = 1e-4
+        # self.ocp.solver_options.nlp_solver_tol_eq = 1e-4
+        # self.ocp.solver_options.nlp_solver_tol_ineq = 1e-4
+        # self.ocp.solver_options.nlp_solver_tol_comp = 1e-4
+        # self.ocp.solver_options.nlp_solver_tol_stat = 1e-4
+        #self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
         #self.ocp.solver_options.qp_tol=1e-8
         #self.ocp.solver_options.as_rti_iter = 5
         if self.params.cont_type== 'abort':
@@ -238,7 +243,7 @@ class AbstractController:
         # self.ocp.solver_options.nlp_solver_tol_eq = 5e-4
         # self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
 
-        #self.ocp.solver_options.levenberg_marquardt = 1e-4
+        self.ocp.solver_options.levenberg_marquardt = 1e-3
 
         # Additional settings, in general is an empty method
         self.additionalSetting()

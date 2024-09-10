@@ -32,31 +32,33 @@ def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
                         data_loaded = pickle.load(f)
                     break
     path = os.path.join(folder,i +'/'+i+'.pkl')
-    print(path)
+    print(f'loaded dataset :{path}')
     return data_loaded
 
 
 if __name__ == '__main__':
-    data_par = load_data('ParallelWithCheck',10,0,1e-3) 
-    data_high = load_data('ParallelLimited',10,0,1e-3,'uni',16)
+    data_1 = load_data('ParallelWithCheck',10,0,1e-3) 
+    data_2 = load_data('Receding',10,0,1e-3,'uni',16)
+    
 
     hor_par,hor_high=[],[]
     jumps_par, jumps_high = [],[]
     x0s=[]
-    for i in range(len(data_par)):
-        for j in range(len(data_par)):
-            if (data_par[i][2][0]==data_high[j][2][0]).all(): 
-                if data_par[i][1]==0 and data_high[j][1]==1: 
-                    print(f'x0:{data_par[i][2][0]}, par {data_par[i][1]}, high {data_high[j][1]}')
-                    hor_par.append(data_par[i][9])
-                    hor_high.append(data_high[j][9])  
-                    jumps_par.append(data_par[i][8])
-                    jumps_high.append(data_high[j][8])
+    for i in range(len(data_1)):
+        for j in range(len(data_1)):
+            if (data_1[i][2][0]==data_2[j][2][0]).all(): 
+                if data_1[i][1]==1 and data_2[j][1]==0: 
+                    print(f'x0:{data_1[i][2][0]}, par {data_1[i][1]}, high {data_2[j][1]}')
+                    hor_par.append(data_1[i][9])
+                    hor_high.append(data_2[j][9])  
+                    jumps_par.append(data_1[i][8])
+                    jumps_high.append(data_2[j][8])
                     x0s.append(i)
                     print(i)
                     print(j) 
     print(len(hor_par))
-    n_plot = len(hor_par)
+    n_plot = len(hor_par)    
+    
     if True:
         for i in range(10,n_plot):
             print(x0s[i])
@@ -76,16 +78,20 @@ if __name__ == '__main__':
             
             #plt.show()
             
-            plt.figure('Comparison')
+            plt.figure('u0')
             plt.clf()
-            plt.plot(np.array(data_par[x0s[i]][-1]),  linestyle='-', color='b')
-            plt.plot(np.array(data_high[x0s[i]][-1]),  linestyle='-', color='r')
-            #plt.plot(np.array(data_par[x0s[i]][6])[:,1],  linestyle='-', color='b')
-            # plt.plot(np.array(data_high[x0s[i]][6])[:,1],  linestyle='-', color='r')
-            # plt.plot(np.array(data_par[x0s[i]][6])[:,2],  linestyle='-', color='b')
-            # plt.plot(np.array(data_high[x0s[i]][6])[:,2],  linestyle='-', color='r')
-            # plt.plot(np.array(data_par[x0s[i]][6])[:,3],  linestyle='-', color='b')
-            # plt.plot(np.array(data_high[x0s[i]][6])[:,3],  linestyle='-', color='r')
+            plt.plot(np.array(data_1[x0s[i]][5])[:,0] -np.array(data_2[x0s[i]][5])[:,0],  linestyle='-', color='b')
+            #plt.plot(np.array(data_2[x0s[i]][7])[:,0],  linestyle='-', color='r')
+            plt.figure('u1')
+            plt.clf()
+            plt.plot(np.array(data_1[x0s[i]][5])[:,1] -np.array(data_2[x0s[i]][5])[:,1],  linestyle='-', color='b')
+            #plt.plot(np.array(data_2[x0s[i]][7])[:,1],  linestyle='-', color='r')
+            plt.figure('u2')
+            plt.clf()
+            plt.plot(np.array(data_1[x0s[i]][5])[:,2] -np.array(data_2[x0s[i]][5])[:,2],  linestyle='-', color='b')
+            #plt.plot(np.array(data_2[x0s[i]][7])[:,2],  linestyle='-', color='r')
+            # plt.plot(np.array(data_1[x0s[i]][6])[:,3],  linestyle='-', color='b')
+            # plt.plot(np.array(data_2[x0s[i]][6])[:,3],  linestyle='-', color='r')
             
             #plt.legend(['x1','x2','x3'])
             plt.grid(True)
@@ -123,11 +129,11 @@ if __name__ == '__main__':
     hor_tot_par = []
     hor_tot_rec = []
     
-    for i in range(len(data_par)):
-        for j in range(len(data_par[i][-2])):
-            hor_tot_par.append(data_par[i][-2][j])
-        for j in range(len(data_high[i][-2])):
-            hor_tot_rec.append(data_high[i][-2][j])
+    for i in range(len(data_1)):
+        for j in range(len(data_1[i][-2])):
+            hor_tot_par.append(data_1[i][-2][j])
+        for j in range(len(data_2[i][-2])):
+            hor_tot_rec.append(data_2[i][-2][j])
     
     if True:
         plt.figure()
