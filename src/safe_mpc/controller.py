@@ -2,7 +2,6 @@ import numpy as np
 import scipy.linalg as lin
 from .abstract import AbstractController
 
-
 class NaiveController(AbstractController):
     def __init__(self, simulator):
         super().__init__(simulator)
@@ -86,8 +85,6 @@ class RecedingController(STWAController):
     def __init__(self, simulator):
         super().__init__(simulator)
         self.r = self.N
-        self.alternative_x_guess = self.x_guess
-        self.alternative_u_guess = self.u_guess
         self.min_negative_jump = self.params.min_negative_jump
         self.step_old_solution = 0
 
@@ -207,7 +204,6 @@ class ParallelWithCheck(RecedingController):
         self.constrain_n(n_constr)
         status = self.solve(x,[n_constr])
         checked_r = self.check_safe_n()
-        # or(status==2 and self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp))
         if ((check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r > 1) \
             and (status==0):
             constr_ver = n_constr if check else 0
@@ -232,15 +228,15 @@ class ParallelWithCheck(RecedingController):
     def step(self,x):
         node_success = 0
         core = None
-        for i in reversed(self.constrains):
+        for i in self.constrains:
             result = self.sing_step(x,i)
             if result > node_success:
                 core = i
                 node_success = result
                 tmp_x = np.copy(self.x_temp)
                 tmp_u = np.copy(self.u_temp)
-                # if node_success > 1:
-                #     break
+                if result==self.N:
+                    break
         if node_success > 1:
             self.core_solution = core
             self.step_old_solution = 0
@@ -259,7 +255,6 @@ class ParallelWithCheck(RecedingController):
                 print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
                 return None
         self.safe_hor -= 1
-
 
         return self.provideControl()
 
@@ -350,13 +345,20 @@ class ParallelLimited(ParallelWithCheck):
             print(self.constrains)
         if not(self.safe_hor in self.constrains):
             print('ERROR NOT PRESENT R\n\n\n\n\n\n')
+        k=1
         for i in self.constrains:
+            #print(self.constrains)
             result = self.sing_step(x,int(i))
             if result > node_success:
-                core = i
+                #print(self.constrains)
+                
+                core = k
                 node_success = result
                 tmp_x = np.copy(self.x_temp)
                 tmp_u = np.copy(self.u_temp)
+                if result==self.N:
+                    break
+            k+=1
         if node_success > 1:
             self.core_solution = core
             self.step_old_solution = 0

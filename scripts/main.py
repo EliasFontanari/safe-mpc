@@ -171,7 +171,6 @@ if __name__ == '__main__':
                              'parallel2': 'ParallelWithCheck',
                              'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
-    args['rti'] = True
     if args['init_conditions']:
         args['controller'] = 'receding'
     # Check if the system and controller selected are available
@@ -313,7 +312,7 @@ if __name__ == '__main__':
         u_guess_vec = np.load(data_name + f'u_guess_{conf.alpha}.npy')
         res = []
         progress_bar = tqdm(total=conf.test_num, desc='Running on %d' %(conf.test_num))
-        for i in range(53,conf.test_num):
+        for i in range(0,conf.test_num):
             res.append(simulate_mpc(i))
             progress_bar.update(1)
         progress_bar.close()

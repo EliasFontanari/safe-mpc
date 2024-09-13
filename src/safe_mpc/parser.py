@@ -30,6 +30,7 @@ def parse_args():
 
 class Parameters:
     def __init__(self, m_name, cont_type, rti=True):
+        self.rti = rti
         self.cont_type = cont_type
 
         # Define all the useful paths
@@ -87,6 +88,7 @@ class Parameters:
         self.min_negative_jump = int(controller['min_negative_jump'])
         self.err_thr = float(controller['traj_err_threshold'])
         self.bounds_tol = float(controller['bounds_tolerance'])
+        
         
 
         if cont_type not in ['naive', 'abort']:

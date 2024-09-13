@@ -105,9 +105,9 @@ if __name__ == '__main__':
                              'parallel2': 'ParallelWithCheck',
                              'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
-    control = 'parallel2'
+    control = 'parallel_limited'
     # Define the configuration object, model, simulator
-    conf = Parameters('triple_pendulum', control,rti=False)
+    conf = Parameters('triple_pendulum', control,rti=True)
     model = getattr(models,'TriplePendulumModel')(conf)
     simulator = SimDynamics(model)
     controller = getattr(controllers, available_controllers[control])(simulator)
@@ -160,8 +160,12 @@ if __name__ == '__main__':
         pickle.dump(results,file)
     
     x_viable=[]
+    x_suspended=[]
     for j in range(len(results)):
             if results[j][1] == 0:
                 x_viable.append(results[j][4])
+            if results[j][1] == None:
+                x_suspended.append(results[j][6][-1])
     np.save(DATA_DIR + results_name + 'x_viable.npy', np.asarray(x_viable))
+    np.save(DATA_DIR + results_name + 'x_suspended.npy', np.asarray(x_suspended))
     print(len(x_viable))

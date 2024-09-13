@@ -24,8 +24,11 @@ def bounds_dist(x):
     #     ,np.abs(x[1]-x1_b[1])+x[4]/(10*(np.abs(x[1]-model.x_max[1]))),\
     #     np.abs(x[2]-x2_b[0])+x[5]/(10*(np.abs(x[2]-model.x_max[2])))]))
     #return np.abs(x[0]-model.x_max[0]) - x[3]/ 10*np.abs(x[0]-model.x_max[0]) 
-    return np.linalg.norm(np.array([x[0]-x0_b,0.5*(x[1]-x1_b),0.2*(x[2]-x2_b)]))
+    return np.linalg.norm(np.array([x[0]-x0_b]))
     
+def convergenceCriteria(x):
+    mask = np.array([1,0,0,1,0,0])
+    return np.linalg.norm(np.multiply(mask, x - model.x_ref))
 
 if __name__ == '__main__':
     available_controllers = {'naive': 'NaiveController',
@@ -41,13 +44,14 @@ if __name__ == '__main__':
     
     
     control = 'abort'
-    abort = 'parallel2'
+    abort = 'parallel_limited'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'unif'
-        cores = 16
+        mode = 'CIS'
+        cores = 4
     min_jump = 0
     
+    concluded = True    
     # Define the configuration object, model, simulator and controller
     conf = Parameters('triple_pendulum', control,rti=False)
     model = getattr(models,'TriplePendulumModel')(conf)
@@ -61,14 +65,25 @@ if __name__ == '__main__':
     folder_list = os.listdir(folder)
     viable = ''
     for i in folder_list:
-        if 'Thr'+str(controller.err_thr) in i and available_controllers[abort] in i and str(controller.params.alpha) in i \
+        if abort == 'naive':
+            if not(concluded) and 'naive' in i and str(controller.params.alpha) in i:
+                viable = i +'/'+i+'x_suspended.npy'
+                break
+        elif 'Thr'+str(controller.err_thr)+'_' in i and available_controllers[abort] in i and str(controller.params.alpha) in i \
             and 'Jump'+str(min_jump) in i:
                 if abort == 'parallel_limited':
                     if 'cores'+str(cores) in i and mode in i:
-                        viable = i +'/'+i+'x_viable.npy'
+                        if concluded:
+                            viable = i +'/'+i+'x_viable.npy'
+                        else:
+                            viable = i +'/'+i+'x_suspended.npy'
+                            
                         break
                 else:
-                    viable = i +'/'+i+'x_viable.npy'
+                    if concluded:
+                            viable = i +'/'+i+'x_viable.npy'
+                    else:
+                        viable = i +'/'+i+'x_suspended.npy'
                     break
     print(i)
     
@@ -83,8 +98,12 @@ if __name__ == '__main__':
     t_rep = np.empty((n_a, rep)) * np.nan
     controller.model.setNNmodel()
     closeness_success,closeness_failed = [],[]
+    convergence_index = []
     for i in range(n_a):
         print(f'{i} x_viable={x_viable[i]} \n')
+        print(f'{i} convergence_criteria={convergenceCriteria(x_viable[i])} \n')
+        convergence_index.append(convergenceCriteria(x_viable[i]))
+        
         #controller.reinit_solver()
         #controller.ocp_solver.reset()
         # Repeat each test rep times
@@ -168,16 +187,19 @@ if __name__ == '__main__':
     closeness_failed=np.array(closeness_failed)
     closeness_success=np.array(closeness_success)
     
+    if False:
+        plt.figure()
+        plt.hist(closeness_success[closeness_success<100],density=False,bins=20,color='blue', edgecolor='black', alpha=.5)
+        plt.hist(closeness_failed[closeness_failed<100] ,density=False,bins=20,color='yellow', edgecolor='black', alpha=.5)
+        
     
-    plt.figure()
-    plt.hist(closeness_success[closeness_success<100],density=False,bins=20,color='blue', edgecolor='black', alpha=.5)
-    plt.hist(closeness_failed[closeness_failed<100] ,density=False,bins=20,color='yellow', edgecolor='black', alpha=.5)
-    
- 
-    # Adding labels and title
-    plt.xlabel('Values')
-    plt.ylabel('Frequency')
-    plt.title('Successes vs fails closeness to bounds viable states')
-    
-    plt.show()
+        # Adding labels and title
+        plt.xlabel('Values')
+        plt.ylabel('Frequency')
+        plt.title('Successes vs fails closeness to bounds viable states')
+        
+        plt.show()
     print(f'Mean of closeness : {np.mean(np.hstack((closeness_failed,closeness_success)))}')
+    
+    if not(concluded):
+        print(f'max distance form convergence={max(convergence_index)}')

@@ -63,7 +63,7 @@ if __name__ == '__main__':
     for a in ALPHA:
         
         data_1 = load_data('ParallelWithCheck',a,0,1e-3) 
-        data_2 = load_data('Receding',a,0,1e-3,'uni',16)
+        data_2 = load_data('ParallelLimited',a,0,1e-3,'uni',8)
         
 
         hor_par,hor_high=[],[]

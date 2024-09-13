@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 import l4casadi as l4c
 
-
 class NeuralNetDIR(nn.Module):
     def __init__(self, input_size, hidden_size, output_size):
         super(NeuralNetDIR, self).__init__()
@@ -66,13 +65,13 @@ class AbstractModel:
         self.nn_model = None
         self.nn_func = None
 
-        self.state_tol =params.bounds_tol
+        self.bounds_tol =params.bounds_tol
 
     def addDynamicsModel(self, params):
         pass
 
     def checkStateConstraints(self, x):
-        return np.all(np.logical_and(x >= self.x_min-self.state_tol, x <= self.x_max+self.state_tol))
+        return np.all(np.logical_and(x >= self.x_min-self.bounds_tol, x <= self.x_max+self.bounds_tol))
 
     def checkControlConstraints(self, u):
         return np.all(np.logical_and(u >= self.u_min-1e-4, u <= self.u_max+1e-4))
@@ -128,7 +127,6 @@ class SimDynamics:
         sim.solver_options.T = self.params.dt_s
         sim.solver_options.integrator_type = self.params.integrator_type
         sim.solver_options.num_stages = self.params.num_stages
-        #sim.solver_options.num_steps = 4
         sim.parameter_values = np.array([0.])
         gen_name = self.params.GEN_DIR + '/sim_' + sim.model.name
         sim.code_export_directory = gen_name
@@ -222,38 +220,21 @@ class AbstractController:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
-        # self.ocp.solver_options.integrator_type = 'DISCRETE'
-        #self.ocp.solver_options.hessian_approx = 'EXACT'
-        #self.ocp.solver_options.qp_tol = 1e-3
-
-        #self.ocp.solver_options.tol = 1e-4
-        # self.ocp.solver_options.nlp_solver_tol_eq = 1e-4
-        # self.ocp.solver_options.nlp_solver_tol_ineq = 1e-4
-        # self.ocp.solver_options.nlp_solver_tol_comp = 1e-4
-        # self.ocp.solver_options.nlp_solver_tol_stat = 1e-4
-        #self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
-        #self.ocp.solver_options.qp_tol=1e-8
-        #self.ocp.solver_options.as_rti_iter = 5
+        
         if self.params.cont_type== 'abort':
             self.ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
             self.ocp.solver_options.nlp_solver_tol_eq = 5e-4
             self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
-        # self.ocp.solver_options.sim_method_num_stages = 3
-        # self.ocp.solver_options.sim_method_num_steps = 4
-        # self.ocp.solver_options.nlp_solver_tol_eq = 5e-4
-        # self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
-
-        self.ocp.solver_options.levenberg_marquardt = 1e-3
+        
+        if self.params.rti:
+            self.ocp.solver_options.levenberg_marquardt = 2e-2
 
         # Additional settings, in general is an empty method
         self.additionalSetting()
 
         self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
         self.ocp.code_export_directory = self.gen_name
-        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
-        #self.ocp_solver.store_iterate()
-               
-        #self.reinit_solver()
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate) 
 
         # Initialize guess
         self.fails = 0
@@ -405,18 +386,14 @@ class AbstractController:
     def getLastViableState(self):
         return np.copy(self.x_viable)
     
-    # def guessCorrection(self):
-    #     for i in range(len(self.u_guess)):
-    #         self.x_guess[i+1]=self.simulator.simulate(self.x_guess[i],self.u_guess[i])
 
     def guessCorrection(self):
-        n = np.shape(self.u_guess)[0]
         error = 0
         x_corrected = np.copy(self.x_guess) 
         for i in range(len(self.u_guess)):
             x_corrected[i+1]=self.simulator.simulate(x_corrected[i],self.u_guess[i])
             error += np.linalg.norm(np.abs(self.x_guess[i+1]-x_corrected[i+1]))
-        if np.linalg.norm(self.x_guess - x_corrected) > self.err_thr* np.sqrt(self.N+1):#error > self.err_thr:
+        if np.linalg.norm(self.x_guess - x_corrected) > self.err_thr* np.sqrt(self.N+1):
             #print(error)
             self.x_guess = x_corrected
 

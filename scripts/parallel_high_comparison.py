@@ -37,8 +37,9 @@ def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
 
 
 if __name__ == '__main__':
-    data_1 = load_data('ParallelWithCheck',10,0,1e-3) 
-    data_2 = load_data('Receding',10,0,1e-3,'uni',16)
+    alpha = 2
+    data_1 = load_data('ParallelWithCheck',alpha,0,1e-3) 
+    data_2 = load_data('ParallelLimited',alpha,0,1e-3,'uni',8)
     
 
     hor_par,hor_high=[],[]
@@ -47,7 +48,7 @@ if __name__ == '__main__':
     for i in range(len(data_1)):
         for j in range(len(data_1)):
             if (data_1[i][2][0]==data_2[j][2][0]).all(): 
-                if data_1[i][1]==1 and data_2[j][1]==0: 
+                if data_1[i][1]==0 and data_2[j][1]==1: 
                     print(f'x0:{data_1[i][2][0]}, par {data_1[i][1]}, high {data_2[j][1]}')
                     hor_par.append(data_1[i][9])
                     hor_high.append(data_2[j][9])  
@@ -60,7 +61,7 @@ if __name__ == '__main__':
     n_plot = len(hor_par)    
     
     if True:
-        for i in range(10,n_plot):
+        for i in range(0,n_plot):
             print(x0s[i])
             plt.figure(f'{i}')
             
@@ -147,7 +148,7 @@ if __name__ == '__main__':
         plt.legend(['Parallel', 'Receding'])
         plt.grid(True)
         
-        plt.savefig('histogram_r',dpi=300)
+        plt.savefig(f'histogram_r{alpha}',dpi=300)
 
 
         # Display the plot
