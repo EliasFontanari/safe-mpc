@@ -13,7 +13,7 @@ rename it as `nn_models.zip` and unzip it.
 - Follow the instructions to install [CasADi](https://web.casadi.org/get/), [Acados](https://docs.acados.org/installation/index.html), [L4CasADi] (https://github.com/Tim-Salzmann/l4casadi) and [Pytorch](https://pytorch.org/get-started/locally/).
 
 ## Usage 
-Configure the hyperparameters, such as the safety factor alpha and the dimension of the set of inital configurations to test in `config.yaml`.
+Configure the hyperparameters, such as the safety factor alpha and the dimension of the set of inital configurations to test in `controller.yaml`.
 Run the script `main.py` inside the root folder. One can consult the help for the available options:
 ```
 python3 scripts/main.py --help
