@@ -51,7 +51,7 @@ python3 scripts/mpc_parallelized.py
 ```
 For each test it saves in the folder `DATI_PARALLELIZED` a subfolder that contains safe abort states and all the data of simulations.
 
-For both the methods, if one wants to test a parallel limited controller, it is necessary to set the number of computational units of the controller in `controller.yaml` and the method of allocation inside the constructor of the class `ParallelLimited` in the file `controller.py`.
+If one wants to test a parallel limited controller, it is necessary to set the number of computational units of the controller in `controller.yaml` and the method of allocation inside the constructor of the class `ParallelLimited` in the file `controller.py`.
 The options are `self.constraint_mode = self.high_nodes_constraint` for Parallel High, `self.constraint_mode = self.uniform_constraint` for Parallel Uniform and `self.constraint_mode = self.CIS_distance_constraint` for Parallel Closest.
 
 ### Safe abort controller
