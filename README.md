@@ -5,6 +5,7 @@ This repo contains algorithms for Model Predictive Control, ensuring safety cons
 ## Installation
 - Clone the repository\
 `git clone https://github.com/EliasFontanari/safe-mpc.git`
+and switch to branch `devel`
 - Install the requirements\
 `pip install -r requirements.txt`
 - Inside the root folder, download the zip (containing the Neural Network weights) from [here](https://drive.google.com/drive/folders/1RxXyuD6rPAJ7cdMhbY2nh_YfajpJ8Ku-?usp=sharing),
