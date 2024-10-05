@@ -55,7 +55,7 @@ parallel_limited:
   T: 0.175
   ws_r: 1e4
   ws_t: 1e4
-  n_cores: 2
+  n_cores: 8
 
 parallel_receding:
   dt: 5e-3

@@ -15,10 +15,11 @@ import matplotlib.pyplot as plt
 import safe_mpc.plut as plut
 
 def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
+    control = available_controllers[control]
     folder = os.path.join(os.getcwd(),'DATI_PARALLELIZED')
     files = os.listdir(folder)
     for i in files:
-        if 'Thr'+str(err_thr) in i and control in i and str(alpha) in i \
+        if 'Thr'+str(err_thr)+'_' in i and control in i and 'alpha'+str(alpha) in i \
             and 'Jump'+str(min_negative_jump) in i:
                 if control  == 'ParallelLimited':
                     if 'cores'+str(cores) in i and mode in i:
@@ -37,9 +38,23 @@ def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
 
 
 if __name__ == '__main__':
+    
+    available_controllers = {'naive': 'NaiveController',
+                             'st': 'STController',
+                             'stwa': 'STWAController',
+                             'htwa': 'HTWAController',
+                             'receding': 'RecedingController',
+                             'parallel': 'ParallelWithCheck',
+                             'parallel_limited':'ParallelLimited',
+                             'abort': 'SafeBackupController'}
+
+    # To load a dataset obtained by mpc_parallelized, arguments to be passed are
+    # Controller, as a key of the above dictionary, safety factor alpha, min_jump, threshold guess correction. In addition,
+    # if you want to load a dataset of a parallel limited, insert the type ( 'uni', 'high' or 'CIS' for closest) and number of 
+    # computational units.
     alpha = 2
-    data_1 = load_data('ParallelWithCheck',alpha,0,1e-3) 
-    data_2 = load_data('ParallelLimited',alpha,0,1e-3,'uni',8)
+    data_1 = load_data('parallel',alpha,0,1e-3) 
+    data_2 = load_data('parallel_limited',alpha,0,1e-3,'uni',8)
     
 
     hor_par,hor_high=[],[]
@@ -70,8 +85,8 @@ if __name__ == '__main__':
             
             #plt.figure('High 16')
             plt.plot(hor_high[i],  linestyle='-', color='orange')
-            plt.legend(['Parallel','Receding'])
-            plt.xlabel('Time [s]')
+            plt.legend(['Parallel','Uniform 8'])
+            plt.xlabel('Time steps')
             plt.ylabel('r safe node')
             plt.ylim(0,37)
             plt.grid(True)

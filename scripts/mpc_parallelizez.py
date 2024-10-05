@@ -100,12 +100,15 @@ if __name__ == '__main__':
                              'stwa': 'STWAController',
                              'htwa': 'HTWAController',
                              'receding': 'RecedingController',
-                             'parallel': 'ParallelController',
+                             'parallel': 'ParallelWithCheck',
                              'parallel_limited':'ParallelLimited',
-                             'parallel2': 'ParallelWithCheck',
-                             'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
-    control = 'parallel_limited'
+    
+    
+    # Set in variable control the controller to test, between the keys in the above dictionary. 
+    
+    
+    control = 'parallel'
     # Define the configuration object, model, simulator
     conf = Parameters('triple_pendulum', control,rti=True)
     model = getattr(models,'TriplePendulumModel')(conf)

@@ -54,8 +54,7 @@ def init_search():
 
 if __name__ == '__main__':
     print(f'Available cores: {os.cpu_count()}')
-    length = 500
-    bins = 10
+    
      
     lock =  multiprocessing.Lock() 
     manager = multiprocessing.Manager()
@@ -70,6 +69,9 @@ if __name__ == '__main__':
     model = getattr(models,'TriplePendulumModel')(conf)
     #gc = GravityCompensation(conf, model)
     simulator = SimDynamics(model)
+    
+    length = conf.test_num
+    bins = 10
     
     print(conf.alpha)
 
@@ -98,6 +100,6 @@ if __name__ == '__main__':
 
     #print(final_list)
     print(len(x_init_vec))
-    np.save(conf.DATA_DIR + f'Parallelized_x_init_{conf.alpha}.npy', np.asarray(x_init_vec))
-    np.save(conf.DATA_DIR + f'Parallelized_x_guess_vec_{conf.alpha}.npy', np.asarray(x_guess_vec))
-    np.save(conf.DATA_DIR + f'Parallelized_u_guess_vec_{conf.alpha}.npy', np.asarray(u_guess_vec))
+    np.save(conf.DATA_DIR + f'x_init_{conf.alpha}.npy', np.asarray(x_init_vec))
+    np.save(conf.DATA_DIR + f'x_guess_vec_{conf.alpha}.npy', np.asarray(x_guess_vec))
+    np.save(conf.DATA_DIR + f'u_guess_vec_{conf.alpha}.npy', np.asarray(u_guess_vec))

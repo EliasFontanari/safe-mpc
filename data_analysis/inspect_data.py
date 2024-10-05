@@ -18,10 +18,11 @@ import safe_mpc.plut as plut
 
 
 def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
+    control = available_controllers[control]
     folder = os.path.join(os.getcwd(),'DATI_PARALLELIZED')
     files = os.listdir(folder)
     for i in files:
-        if 'Thr'+str(err_thr) in i and control in i and str(alpha) in i \
+        if 'Thr'+str(err_thr)+'_' in i and control in i and 'alpha'+str(alpha) in i \
             and 'Jump'+str(min_negative_jump) in i:
                 if control  == 'ParallelLimited':
                     if 'cores'+str(cores) in i and mode in i:
@@ -35,7 +36,7 @@ def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
                         data_loaded = pickle.load(f)
                     break
     path = os.path.join(folder,i +'/'+i+'.pkl')
-    print(path)
+    print(f'loaded dataset :{path}')
     return data_loaded
 
 def convergenceValue(x):
@@ -51,15 +52,32 @@ def bounds_dist(x):
 
 
 if __name__ == '__main__':
+    
+    
+    available_controllers = {'naive': 'NaiveController',
+                             'st': 'STController',
+                             'stwa': 'STWAController',
+                             'htwa': 'HTWAController',
+                             'receding': 'RecedingController',
+                             'parallel': 'ParallelWithCheck',
+                             'parallel_limited':'ParallelLimited',
+                             'abort': 'SafeBackupController'}
+    
     conf = Parameters('triple_pendulum', 'receding',rti=True)
     model = getattr(models,'TriplePendulumModel')(conf)
     simulator = SimDynamics(model)
     model.setNNmodel()
     # Data content :  k, convergence, x_sim, stats, x_v, u,x_simu,u_simu,jumps,safe_hor_hist,core_sol
-    dataset1 = 'ParallelWithCheck'
-    dataset2 = 'Receding'
+    dataset1 = 'parallel'
+    dataset2 = 'receding'
+    
+    # To load a dataset obtained by mpc_parallelized, arguments to be passed are
+    # Controller, as a key of the above dictionary, safety factor alpha, min_jump, threshold guess correction. In addition,
+    # if you want to load a dataset of a parallel limited, insert the type ( 'uni', 'high' or 'CIS' for closest) and number of 
+    # computatioanl units. 
+    
     data_par = load_data(dataset1,2,0,1e-3,'uni',16) 
-    data_rec = load_data(dataset2,2,0,1e-3,'high',16)
+    data_rec = load_data(dataset2,2,0,1e-3,'uni',8)
 
     x_v_par,x_v_rec=[],[]
     x_v_par_val,x_v_rec_val = [],[] 
@@ -83,7 +101,7 @@ if __name__ == '__main__':
     print(f'Viable parallel states:{len(x_v_par)}, mean:{par_mean}, std:{par_std}')
     print(f'Viable receding states:{len(x_v_rec)}, mean:{rec_mean}, std:{rec_std}')
     
-    density = True  
+    density = False  
     plt.figure()
     plt.hist(x_v_par_val,density=density,bins=10 ,color='blue', edgecolor='black', alpha=.5)
     plt.hist(x_v_rec_val,density=density,bins=10 ,color='yellow', edgecolor='black', alpha=.5)
@@ -102,7 +120,7 @@ if __name__ == '__main__':
     plt.figure()
     plt.hist(x_v_par_bounds_dist,density=False,bins=30,color='blue', edgecolor='black', alpha=.5)
     plt.hist(x_v_rec_bounds_dist ,density=False,bins=30,color='yellow', edgecolor='black', alpha=.5)
-    plt.legend(['Parallel', 'Receding'])
+    plt.legend([dataset1, dataset2])
     plt.xlabel('Values')
     plt.ylabel('Frequency')
     
@@ -123,7 +141,7 @@ if __name__ == '__main__':
     print(f'percentage of problems under 0.23 for receding: {x_v_rec_bounds_dist[x_v_rec_bounds_dist<0.23].size/len(x_v_rec_bounds_dist)}')
     
     
-    # convergence value for the trajectory and the viable states
+    # convergence values for the trajectory and the viable states
     data_par = load_data(dataset1,2,0,1e-3,'uni',16) 
     data_high4 = load_data(dataset2,2,0,1e-3,'high',16)
     x_v_par,x_v_high=[],[]
@@ -141,8 +159,8 @@ if __name__ == '__main__':
     
     
     plt.figure()
-    plt.hist(x_val_par_min_traj,density=True,color='blue', edgecolor='black', alpha=.5)
-    plt.hist(x_val_high_min_traj,density=True,color='yellow', edgecolor='black', alpha=.5)
+    plt.hist(x_val_par_min_traj,density=False,color='blue', edgecolor='black', alpha=.5)
+    plt.hist(x_val_high_min_traj,density=False,color='yellow', edgecolor='black', alpha=.5)
     
  
     # Adding labels and title

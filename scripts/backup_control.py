@@ -36,19 +36,20 @@ if __name__ == '__main__':
                              'stwa': 'STWAController',
                              'htwa': 'HTWAController',
                              'receding': 'RecedingController',
-                             'parallel': 'ParallelController',
+                             'parallel': 'ParallelWithCheck',
                              'parallel_limited':'ParallelLimited',
-                             'parallel2': 'ParallelWithCheck',
-                             'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
     
     
     control = 'abort'
-    abort = 'parallel_limited'
+    
+    # Set in variable abort the controller's states on which execute the backup control, between the keys in the above dictionary.
+    
+    abort = 'parallel'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'CIS'
-        cores = 4
+        mode = 'uni'
+        cores = 16
     min_jump = 0
     
     concluded = True    
@@ -69,7 +70,7 @@ if __name__ == '__main__':
             if not(concluded) and 'naive' in i and str(controller.params.alpha) in i:
                 viable = i +'/'+i+'x_suspended.npy'
                 break
-        elif 'Thr'+str(controller.err_thr)+'_' in i and available_controllers[abort] in i and str(controller.params.alpha) in i \
+        elif 'Thr'+str(controller.err_thr)+'_' in i and available_controllers[abort] in i and 'alpha'+str(controller.params.alpha) in i \
             and 'Jump'+str(min_jump) in i:
                 if abort == 'parallel_limited':
                     if 'cores'+str(cores) in i and mode in i:

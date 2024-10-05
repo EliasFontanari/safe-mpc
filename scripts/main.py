@@ -166,10 +166,8 @@ if __name__ == '__main__':
                              'stwa': 'STWAController',
                              'htwa': 'HTWAController',
                              'receding': 'RecedingController',
-                             'parallel': 'ParallelController',
+                             'parallel': 'ParallelWithCheck',
                              'parallel_limited':'ParallelLimited',
-                             'parallel2': 'ParallelWithCheck',
-                             'parallel_receding':'RecedingParallel',
                              'abort': 'SafeBackupController'}
     if args['init_conditions']:
         args['controller'] = 'receding'

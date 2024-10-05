@@ -9,7 +9,7 @@ def parse_args():
     parser.add_argument('-s', '--system', type=str, default='triple_pendulum',
                         help='Systems to test. Available: double_pendulum, triple_pendulum')
     parser.add_argument('-c', '--controller', type=str, default='naive',
-                        help='Controllers to test. Available: naive, st, stwa, htwa, receding')
+                        help='Controllers to test. Available: naive, st, stwa, htwa, receding, parallel, parallel_limited')
     parser.add_argument('-i', '--init-conditions', action='store_true',
                         help='Find the initial conditions for testing all the controller')
     parser.add_argument('-g', '--guess', action='store_true',

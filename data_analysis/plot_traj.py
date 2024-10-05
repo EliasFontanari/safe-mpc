@@ -22,7 +22,7 @@ def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
     folder = os.path.join(os.getcwd(),'DATI_PARALLELIZED')
     files = os.listdir(folder)
     for i in files:
-        if 'Thr'+str(err_thr) in i and control in i and str(alpha) in i \
+        if 'Thr'+str(err_thr)+'_' in i and control in i and 'alpha'+str(alpha) in i \
             and 'Jump'+str(min_negative_jump) in i:
                 if control  == 'ParallelLimited':
                     if 'cores'+str(cores) in i and mode in i:
