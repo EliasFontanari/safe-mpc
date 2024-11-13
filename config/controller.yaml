@@ -44,6 +44,12 @@ receding:
   ws_r: 1e4
   ws_t: 1e2
 
+receding_single:
+  dt: 5e-3
+  T: 0.175
+  ws_r: 1e4
+  ws_t: 1e2
+
 parallel:
   dt: 5e-3
   T: 0.175

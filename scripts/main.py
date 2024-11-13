@@ -5,7 +5,8 @@ from tqdm import tqdm
 import safe_mpc.model as models
 import safe_mpc.controller as controllers
 from safe_mpc.parser import Parameters, parse_args
-from safe_mpc.abstract import SimDynamics
+from safe_mpc.abstract_multiphase import SimDynamics
+#from safe_mpc.abstract import SimDynamics
 from safe_mpc.gravity_compensation import GravityCompensation
 from acados_template import AcadosOcpSolver
 from datetime import datetime
@@ -60,8 +61,8 @@ def simulate_mpc(p):
         if k ==54:
             pass
         u[k] = controller.step(x_sim[k])
-        stats.append(controller.getTime())
-        simulator_state = controller.simulate_solver(x_sim[k], u[k])
+        #stats.append(controller.getTime())
+        #simulator_state = controller.simulate_solver(x_sim[k], u[k])
         x_sim[k+1]=simulator.simulate(x_sim[k], u[k])
         #print(controller.x_viable-controller.simulator.checkSafeIntegrate([x_sim[k]],controller.u_guess,controller.safe_hor)[1])
         x_simu[p].append(x_sim[k + 1])
@@ -166,6 +167,7 @@ if __name__ == '__main__':
                              'stwa': 'STWAController',
                              'htwa': 'HTWAController',
                              'receding': 'RecedingController',
+                             'receding_single':'RecedingSingleConstraint',
                              'parallel': 'ParallelWithCheck',
                              'parallel_limited':'ParallelLimited',
                              'abort': 'SafeBackupController'}
@@ -285,6 +287,8 @@ if __name__ == '__main__':
                 controller.setGuess(x_feasible[i], u_feasible[i])
                 x_init = np.zeros((model.nx,))
                 x_init[:model.nq] = x_init_vec[i]
+                if 'receding_single' in args['controller']:
+                    controller.r = controller.N-1  
                 status = controller.solve(x_init)
                 if (status == 0 or status == 2) and controller.checkGuess():
                     # Refinement successful

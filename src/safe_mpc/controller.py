@@ -1,6 +1,7 @@
 import numpy as np
 import scipy.linalg as lin
-from .abstract import AbstractController
+from .abstract_multiphase import AbstractController
+#from .abstract import AbstractController
 
 class NaiveController(AbstractController):
     def __init__(self, simulator):
@@ -90,6 +91,7 @@ class RecedingController(STWAController):
 
     def additionalSetting(self):
         # Terminal constraint before, since it construct the nn model
+        #pass
         self.terminalConstraint()
         self.runningConstraint()
 
@@ -170,7 +172,95 @@ class RecedingController(STWAController):
             self.fails += 1
         self.r -= 1
         return self.provideControl()
-    
+
+class RecedingSingleConstraint(RecedingController):
+    def __init__(self, simulator):
+        super().__init__(simulator)
+        self.r = self.N-1
+        self.min_negative_jump = self.params.min_negative_jump
+        self.step_old_solution = 0
+
+    def additionalSetting(self):
+        pass
+
+    def solve(self, x0):
+        #self.ocp_solver.load_iterate('/home/utente/Documents/Optim/safe-mpc/triple_pendulum_iterate.json',verbose=False)
+        # Reset current iterate
+        self.solvers[self.r-1].reset()
+
+        # Constrain initial state
+        self.solvers[self.r-1].constraints_set(0, "lbx", x0)
+        self.solvers[self.r-1].constraints_set(0, "ubx", x0)
+
+        y_ref = np.zeros(self.model.ny)
+        y_ref[:self.model.nx] = self.x_ref
+        W = lin.block_diag(self.Q, self.R)
+
+        
+        for i in range(self.N):
+            self.solvers[self.r-1].set(i, 'x', self.x_guess[i])
+            self.solvers[self.r-1].set(i, 'u', self.u_guess[i])
+            self.solvers[self.r-1].cost_set(i, 'yref', y_ref, api='new')
+            self.solvers[self.r-1].cost_set(i, 'W', W, api='new')
+        self.solvers[self.r-1].set(self.N, 'x', self.x_guess[-1])
+        self.solvers[self.r-1].set(0,'x',x0)
+        self.solvers[self.r-1].cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+        self.solvers[self.r-1].cost_set(self.N, 'W', self.Q, api='new')
+
+        # if constr_nodes != None:
+        #     for i in range(1,self.N+1):
+        #         if np.all(np.array(constr_nodes) != i):
+        #             self.ocp_solver.set(i, 'sl', 1e4)
+        #             self.ocp_solver.set(i, 'su', 1e4)
+
+        # Solve the OCP
+        status = self.solvers[self.r-1].solve()
+
+        # Save the temporary solution, independently of the status
+        for i in range(self.N):
+            self.x_temp[i] = self.solvers[self.r-1].get(i, "x")
+            self.u_temp[i] = self.solvers[self.r-1].get(i, "u")
+        self.x_temp[-1] = self.solvers[self.r-1].get(self.N, "x")
+
+        return status
+
+    def step(self, x):
+        # Terminal constraint
+        #self.solvers[self.r].cost_set(self.N, "zl", self.params.ws_t * np.ones((1,)))
+        # Receding constraint
+        #self.solvers[self.r].cost_set(self.r, "zl", self.params.ws_r * np.ones((1,)))
+        # for i in range(1, self.N):
+        #     if i != self.r:
+        #         # No constraints on other running states
+        #         self.solvers[self.r].cost_set(i, "zl", np.zeros((1,)))
+        # Solve the OCP
+        status = self.solve(x)
+
+        r_new = -1
+        for i in range(1, self.N + 1):
+            if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
+                r_new = i 
+        #or(status==2 and self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp))
+        if (status == 0) and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
+            and r_new > 1 and self.simulator.checkSafeIntegrate([x],self.u_temp,r_new)[0]:
+            
+            self.fails = 0
+            self.r = r_new
+            self.step_old_solution = 0
+        else:
+            if self.r == 1:
+                #self.x_viable = np.copy(self.x_guess[self.r])
+                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.r)
+                self.step_old_solution += 1
+
+                print("NOT SOLVED")
+                print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
+                
+                return None
+            self.fails += 1
+        self.r -= 1
+        return self.provideControl()
+
 
 class ParallelWithCheck(RecedingController):    
     def __init__(self, simulator):

@@ -1,5 +1,6 @@
 from casadi import MX, vertcat, cos, sin
-from .abstract import AbstractModel
+from .abstract_multiphase import AbstractModel
+#from .abstract import AbstractModel
 
 
 class DoublePendulumModel(AbstractModel):
@@ -81,6 +82,7 @@ class TriplePendulumModel(AbstractModel):
         self.x_dot = MX.sym("x_dot", 6)
         self.u = MX.sym("u", 3)
         self.p = MX.sym("p", 1)
+        #self.p_global = 0
 
         # dynamics
         self.f_expl = vertcat(

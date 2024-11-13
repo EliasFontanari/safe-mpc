@@ -93,7 +93,7 @@ class Parameters:
 
         if cont_type not in ['naive', 'abort']:
             self.ws_t = float(controller[cont_type]['ws_t'])
-            if cont_type == 'receding':
+            if 'receding' in cont_type:
                 self.ws_r = float(controller[cont_type]['ws_r'])
             if cont_type == 'parallel2':
                 self.ws_r = float(controller[cont_type]['ws_r'])
