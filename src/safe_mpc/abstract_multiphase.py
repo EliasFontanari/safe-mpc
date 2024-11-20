@@ -1,4 +1,3 @@
-from tkinter import NO
 import numpy as np
 import re
 from copy import deepcopy
@@ -165,40 +164,10 @@ class AbstractController:
         self.ocp_name = "".join(re.findall('[A-Z][^A-Z]*', self.__class__.__name__)[:-1]).lower()
         self.simulator = simulator
         self.params = simulator.params
-        
+        self.model = simulator.model
+        self.err_thr=self.params.err_thr
 
         self.N = int(self.params.T / self.params.dt)
-        self.solvers = []
-        for j in range(1,self.N-1):        
-            N_list = [j,1,self.N-j-1] 
-            self.model = deepcopy(simulator.model)
-            self.ocp = AcadosMultiphaseOcp(N_list=N_list)
-            phase_0 = AcadosOcp()
-            phase_1 = AcadosOcp()
-            phase_2 = AcadosOcp()
-            phases= [phase_0,phase_1,phase_2]
-            
-            for i in range(len(N_list)):
-                self.assign_problem(phases[i],i,N_list[i])
-                self.ocp.set_phase(phases[i],i)
-            self.ocp.solver_options.model_external_shared_lib_dir = self.model.l4c_model.shared_lib_dir
-            self.ocp.solver_options.model_external_shared_lib_name = self.model.l4c_model.name
-            # Solver options
-            self.ocp.solver_options.tf = self.params.T
-            self.ocp.solver_options.nlp_solver_type = self.params.solver_type
-            self.ocp.solver_options.hpipm_mode = self.params.solver_mode
-            self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
-            self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
-            self.ocp.solver_options.globalization = self.params.globalization
-            # self.ocp.solver_options.levenberg_marquardt = 1e2
-            
-            self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(j) + '_' + self.model.amodel.name
-            self.ocp.code_export_directory = self.gen_name
-            solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
-            self.solvers.append(solver)
-        
-        self.model = simulator.model
-        # Last solver: common terminal constraint
         self.ocp = AcadosOcp()
 
         # Dimensions
@@ -252,25 +221,23 @@ class AbstractController:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
-        # Terminal constraint
-        self.model.setNNmodel()
-        self.model.amodel.con_h_expr_e = self.model.nn_model
+        #self.ocp.solver_options.tol=self.params.tol
 
-        self.ocp.solver_options.model_external_shared_lib_dir = self.model.l4c_model.shared_lib_dir
-        self.ocp.solver_options.model_external_shared_lib_name = self.model.l4c_model.name
+        
+        # if self.params.cont_type== 'abort':
+        #     self.ocp.solver_options.qp_solver = 'PARTIAL_CONDENSING_HPIPM'
+        #     self.ocp.solver_options.nlp_solver_tol_eq = 5e-4
+        #     self.ocp.solver_options.nlp_solver_tol_ineq = 5e-4
+        
+        if self.params.rti:
+            self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
 
-        self.ocp.constraints.lh_e = np.array([0.])
-        self.ocp.constraints.uh_e = np.array([1e6])
-        self.ocp.constraints.idxsh_e = np.array([0])
-        self.ocp.cost.zl_e = np.ones((1,)) * self.params.ws_t
-        self.ocp.cost.zu_e = np.zeros((1,))
-        self.ocp.cost.Zl_e = np.zeros((1,))
-        self.ocp.cost.Zu_e = np.zeros((1,))
+        # Additional settings, in general is an empty method
+        self.additionalSetting()
 
-        self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(j+1) + '_' + self.model.amodel.name
+        self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + '_' + self.model.amodel.name
         self.ocp.code_export_directory = self.gen_name
-        solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate)
-        self.solvers.append(solver)
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', build=self.params.regenerate) 
 
         # Initialize guess
         self.fails = 0
@@ -284,90 +251,14 @@ class AbstractController:
         # Viable state (None for Naive and ST controllers)
         self.x_viable = None
 
+        self.solver_integrator = AcadosSimSolver(self.ocp,json_file=self.gen_name +'2.json',build=self.params.regenerate,verbose=False)
+
+        
         # Time stats
         self.time_fields = ['time_lin', 'time_sim', 'time_qp', 'time_qp_solver_call',
                             'time_glob', 'time_reg', 'time_tot']
-
-    def assign_problem(self,phase_ocp,pos,N):
-        # Dimensions
-        phase_ocp.dims.N = N
-
-        # Model
-        phase_ocp.model = deepcopy(self.model.amodel)
-        phase_ocp.p_global=0
-
-        # Cost
-        self.Q = 1e-4 * np.eye(self.model.nx)
-        self.Q[0, 0] = 5e2
-        self.R = 1e-4 * np.eye(self.model.nu)
-
-        phase_ocp.cost.W = lin.block_diag(self.Q, self.R)
-
-        phase_ocp.cost.cost_type = "LINEAR_LS"
-
-        phase_ocp.cost.Vx = np.zeros((self.model.ny, self.model.nx))
-        phase_ocp.cost.Vx[:self.model.nx, :self.model.nx] = np.eye(self.model.nx)
-        phase_ocp.cost.Vu = np.zeros((self.model.ny, self.model.nu))
-        phase_ocp.cost.Vu[self.model.nx:, :self.model.nu] = np.eye(self.model.nu)
-
-        phase_ocp.cost.yref = np.zeros(self.model.ny)
-        # Set alpha to zero as default
-        phase_ocp.parameter_values = np.array([0.])
-        #phase_ocp.p_global_values = np.array([0.])
-
-        # Constraints
         
-        phase_ocp.constraints.lbu = self.model.u_min
-        phase_ocp.constraints.ubu = self.model.u_max
-        phase_ocp.constraints.idxbu = np.arange(self.model.nu)
-        phase_ocp.constraints.lbx = self.model.x_min
-        phase_ocp.constraints.ubx = self.model.x_max
-        phase_ocp.constraints.idxbx = np.arange(self.model.nx)
-
-        if pos==0:
-            phase_ocp.constraints.lbx_0 = self.model.x_min
-            phase_ocp.constraints.ubx_0 = self.model.x_max
-            phase_ocp.constraints.idxbx_0 = np.arange(self.model.nx)
-
-        if pos ==1:
-            self.model.setNNmodel()
-            self.model.amodel.con_h_expr = self.model.nn_model
-            phase_ocp.model.con_h_expr = self.model.amodel.con_h_expr 
-            phase_ocp.constraints.lh = np.array([0.])
-            phase_ocp.constraints.uh = np.array([1e6])
-            phase_ocp.constraints.idxsh = np.array([0])
-            phase_ocp.cost.zl = np.zeros((1,))*self.params.ws_r
-            phase_ocp.cost.zu = np.zeros((1,))
-            phase_ocp.cost.Zl = np.zeros((1,))
-            phase_ocp.cost.Zu = np.zeros((1,))
-
-        if pos==2:
-            phase_ocp.cost.W_e = self.Q
-            phase_ocp.cost.cost_type_e = "LINEAR_LS"
-            phase_ocp.cost.Vx_e = np.eye(self.model.nx)
-            phase_ocp.cost.yref_e = np.zeros(self.model.nx)
-
-            phase_ocp.constraints.lbx_e = self.model.x_min
-            phase_ocp.constraints.ubx_e = self.model.x_max
-            phase_ocp.constraints.idxbx_e = np.arange(self.model.nx)
-            phase_ocp.model.con_h_expr = None
-
-            self.model.amodel.con_h_expr_e = self.model.nn_model
-            phase_ocp.model.con_h_expr_e = self.model.amodel.con_h_expr_e 
-            phase_ocp.constraints.lh_e = np.array([0.])
-            phase_ocp.constraints.uh_e = np.array([1e6])
-            phase_ocp.constraints.idxsh_e = np.array([0])
-            phase_ocp.cost.zl_e = np.zeros((1,))*self.params.ws_r
-            phase_ocp.cost.zu_e = np.zeros((1,))
-            phase_ocp.cost.Zl_e = np.zeros((1,))
-            phase_ocp.cost.Zu_e = np.zeros((1,))
-            
-        phase_ocp.model.name = f'phase_{pos}'
-
         
-
-        # Additional settings, in general is an empty method
-        #self.additionalSetting()
     def reinit_solver(self):
         self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name +'.json', build=True,verbose=False)
 
@@ -457,7 +348,7 @@ class AbstractController:
             #self.guessCorrection()
             self.x_guess = np.roll(self.x_guess, -1, axis=0)
             self.u_guess = np.roll(self.u_guess, -1, axis=0)
-            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
                 self.x_guess[-1] = self.simulator.simulate(self.x_guess[-2],self.u_guess[-2])
         else:
             u = self.u_temp[0]
@@ -466,11 +357,11 @@ class AbstractController:
             # Save the current temporary solution
             self.x_guess = np.roll(self.x_temp, -1, axis=0)
             self.u_guess = np.roll(self.u_temp, -1, axis=0)
-            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
                 self.guessCorrection()
                       
         # Copy the last values        
-        if self.params.cont_type != 'receding' and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
+        if not('receding' in self.params.cont_type)  and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
             self.x_guess[-1] = np.copy(self.x_guess[-2])
         self.u_guess[-1] = np.copy(self.u_guess[-2])
         return u
@@ -487,6 +378,510 @@ class AbstractController:
 
     def getTime(self):
         return np.array([self.ocp_solver.get_stats(field) for field in self.time_fields])
+
+    def setGuess(self, x_guess, u_guess):
+        self.x_guess = x_guess
+        self.u_guess = u_guess
+
+    def getGuess(self):
+        return np.copy(self.x_guess), np.copy(self.u_guess)
+
+    def getLastViableState(self):
+        return np.copy(self.x_viable)
+    
+
+    def guessCorrection(self):
+        error = 0
+        x_corrected = np.copy(self.x_guess) 
+        for i in range(len(self.u_guess)):
+            x_corrected[i+1]=self.simulator.simulate(x_corrected[i],self.u_guess[i])
+            error += np.linalg.norm(np.abs(self.x_guess[i+1]-x_corrected[i+1]))
+        if np.linalg.norm(self.x_guess - x_corrected) > self.err_thr* np.sqrt(self.N+1):
+            #print(error)
+            self.x_guess = x_corrected
+    
+class AbstractControllerSingle:
+    def __init__(self, simulator):
+        self.ocp_name = "".join(re.findall('[A-Z][^A-Z]*', self.__class__.__name__)[:-1]).lower()
+        self.simulator = simulator
+        self.model = simulator.model ###
+        self.params = simulator.params
+        self.err_thr=self.params.err_thr
+        if 'parallel' in self.params.cont_type:
+            self.parallel = True
+        else: 
+            self.parallel = None
+
+        
+
+        self.N = int(self.params.T / self.params.dt)
+        self.solvers = []
+        self.create_solvers()
+
+    def create_solvers(self):
+        # First solver:
+        self.ocp = AcadosOcp()
+
+        # Dimensions
+        self.ocp.solver_options.tf = self.params.T
+        self.ocp.dims.N = self.N
+        
+        self.model = deepcopy(self.simulator.model)
+        # Model
+        self.ocp.model = deepcopy(self.simulator.model.amodel)
+
+        # Cost
+        self.Q = 1e-4 * np.eye(self.model.nx)
+        self.Q[0, 0] = 5e2
+        self.R = 1e-4 * np.eye(self.model.nu)
+
+        self.ocp.cost.W = lin.block_diag(self.Q, self.R)
+        self.ocp.cost.W_e = self.Q
+
+        self.ocp.cost.cost_type = "LINEAR_LS"
+        self.ocp.cost.cost_type_e = "LINEAR_LS"
+
+        self.ocp.cost.Vx = np.zeros((self.model.ny, self.model.nx))
+        self.ocp.cost.Vx[:self.model.nx, :self.model.nx] = np.eye(self.model.nx)
+        self.ocp.cost.Vu = np.zeros((self.model.ny, self.model.nu))
+        self.ocp.cost.Vu[self.model.nx:, :self.model.nu] = np.eye(self.model.nu)
+        self.ocp.cost.Vx_e = np.eye(self.model.nx)
+
+        self.ocp.cost.yref = np.zeros(self.model.ny)
+        self.ocp.cost.yref_e = np.zeros(self.model.nx)
+        # Set alpha to zero as default
+        self.ocp.parameter_values = np.array([0.])
+
+        # Constraints
+        self.ocp.constraints.lbx_0 = self.model.x_min
+        self.ocp.constraints.ubx_0 = self.model.x_max
+        self.ocp.constraints.idxbx_0 = np.arange(self.model.nx)
+
+        self.ocp.constraints.lbu = self.model.u_min
+        self.ocp.constraints.ubu = self.model.u_max
+        self.ocp.constraints.idxbu = np.arange(self.model.nu)
+        self.ocp.constraints.lbx = self.model.x_min
+        self.ocp.constraints.ubx = self.model.x_max
+        self.ocp.constraints.idxbx = np.arange(self.model.nx)
+
+        self.ocp.constraints.lbx_e = self.model.x_min
+        self.ocp.constraints.ubx_e = self.model.x_max
+        self.ocp.constraints.idxbx_e = np.arange(self.model.nx)
+
+        # Solver options
+        self.ocp.solver_options.tf = self.params.T
+        self.ocp.solver_options.nlp_solver_type = self.params.solver_type
+        self.ocp.solver_options.hpipm_mode = self.params.solver_mode
+        self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
+        self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
+        self.ocp.solver_options.globalization = self.params.globalization
+        self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+        #self.ocp.solver_options.tol=self.params.tol
+
+        self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(0) + '_' + self.model.amodel.name
+        self.ocp.code_export_directory = self.gen_name
+        solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', generate=self.params.regenerate,build=self.params.regenerate)
+        self.solvers.append(solver)
+        for j in range(1,self.N-1):        
+            N_list = [j,1,self.N-j-1] 
+            self.model = deepcopy(self.simulator.model)
+            self.ocp = AcadosMultiphaseOcp(N_list=N_list)
+            phase_0 = AcadosOcp()
+            phase_1 = AcadosOcp()
+            phase_2 = AcadosOcp()
+            phases= [phase_0,phase_1,phase_2]
+            
+            for i in range(len(N_list)):
+                self.assign_problem(phases[i],i,N_list[i])
+                self.ocp.set_phase(phases[i],i)
+            self.ocp.solver_options.model_external_shared_lib_dir = self.model.l4c_model.shared_lib_dir
+            self.ocp.solver_options.model_external_shared_lib_name = self.model.l4c_model.name
+            # Solver options
+            self.ocp.solver_options.tf = self.params.T
+            self.ocp.solver_options.nlp_solver_type = self.params.solver_type
+            self.ocp.solver_options.hpipm_mode = self.params.solver_mode
+            self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
+            self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
+            self.ocp.solver_options.globalization = self.params.globalization
+            self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+            #self.ocp.solver_options.tol=self.params.tol
+
+
+            
+            self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(j) + '_' + self.model.amodel.name
+            self.ocp.code_export_directory = self.gen_name
+            solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json',generate=self.params.regenerate, build=self.params.regenerate)
+            self.solvers.append(solver)
+        j=j+1
+        N_list = [j,1] 
+        self.model = deepcopy(self.simulator.model)
+        self.ocp = AcadosMultiphaseOcp(N_list=N_list)
+        phase_0 = AcadosOcp()
+        phase_1 = AcadosOcp()
+        phases= [phase_0,phase_1]
+        k=0
+        for phase_ocp in phases: 
+            phase_ocp.dims.N = self.N
+
+            # Model
+            phase_ocp.model = deepcopy(self.model.amodel)
+            #phase_ocp.p_global=0
+
+            # Cost
+            self.Q = 1e-4 * np.eye(self.model.nx)
+            self.Q[0, 0] = 5e2
+            self.R = 1e-4 * np.eye(self.model.nu)
+
+            phase_ocp.cost.W = lin.block_diag(self.Q, self.R)
+
+            phase_ocp.cost.cost_type = "LINEAR_LS"
+
+            phase_ocp.cost.Vx = np.zeros((self.model.ny, self.model.nx))
+            phase_ocp.cost.Vx[:self.model.nx, :self.model.nx] = np.eye(self.model.nx)
+            phase_ocp.cost.Vu = np.zeros((self.model.ny, self.model.nu))
+            phase_ocp.cost.Vu[self.model.nx:, :self.model.nu] = np.eye(self.model.nu)
+
+            phase_ocp.cost.yref = np.zeros(self.model.ny)
+            # Set alpha to zero as default
+            phase_ocp.parameter_values = np.array([0.])
+            #phase_ocp.p_global_values = np.array([0.])
+
+            # Constraints
+            
+            phase_ocp.constraints.lbu = self.model.u_min
+            phase_ocp.constraints.ubu = self.model.u_max
+            phase_ocp.constraints.idxbu = np.arange(self.model.nu)
+            phase_ocp.constraints.lbx = self.model.x_min
+            phase_ocp.constraints.ubx = self.model.x_max
+            phase_ocp.constraints.idxbx = np.arange(self.model.nx)
+            if k==0:
+                phase_ocp.constraints.lbx_0 = self.model.x_min
+                phase_ocp.constraints.ubx_0 = self.model.x_max
+                phase_ocp.constraints.idxbx_0 = np.arange(self.model.nx)
+            elif k==1:
+                self.model.setNNmodel()
+                self.model.amodel.con_h_expr = self.model.nn_model
+                phase_ocp.model.con_h_expr = self.model.amodel.con_h_expr 
+                phase_ocp.constraints.lh = np.array([0.])
+                phase_ocp.constraints.uh = np.array([1e6])
+                
+                phase_ocp.constraints.idxsh = np.array([0])
+                phase_ocp.cost.zl = np.ones((1,))*self.params.ws_r
+                phase_ocp.cost.zu = np.zeros((1,))
+                phase_ocp.cost.Zl = np.zeros((1,))
+                phase_ocp.cost.Zu = np.zeros((1,))
+
+       
+                phase_ocp.cost.W_e = self.Q
+                phase_ocp.cost.cost_type_e = "LINEAR_LS"
+                phase_ocp.cost.Vx_e = np.eye(self.model.nx)
+                phase_ocp.cost.yref_e = np.zeros(self.model.nx)
+
+                phase_ocp.constraints.lbx_e = self.model.x_min
+                phase_ocp.constraints.ubx_e = self.model.x_max
+                phase_ocp.constraints.idxbx_e = np.arange(self.model.nx)
+                #phase_ocp.model.con_h_expr = None
+
+                if self.parallel == None:
+                    self.model.amodel.con_h_expr_e = self.model.nn_model
+                    phase_ocp.model.con_h_expr_e = self.model.amodel.con_h_expr_e 
+                    phase_ocp.constraints.lh_e = np.array([0.])
+                    phase_ocp.constraints.uh_e = np.array([1e6])
+                
+                    phase_ocp.constraints.idxsh_e = np.array([0])
+                    phase_ocp.cost.zl_e = np.ones((1,))*self.params.ws_t
+                    phase_ocp.cost.zu_e = np.zeros((1,))
+                    phase_ocp.cost.Zl_e = np.zeros((1,))
+                    phase_ocp.cost.Zu_e = np.zeros((1,))
+
+            
+            phase_ocp.model.name = f'phase_{k}'
+            k+=1
+
+        for i in range(len(N_list)):
+            self.ocp.set_phase(phases[i],i)
+        self.ocp.solver_options.model_external_shared_lib_dir = self.model.l4c_model.shared_lib_dir
+        self.ocp.solver_options.model_external_shared_lib_name = self.model.l4c_model.name
+        # Solver options
+        self.ocp.solver_options.tf = self.params.T
+        self.ocp.solver_options.nlp_solver_type = self.params.solver_type
+        self.ocp.solver_options.hpipm_mode = self.params.solver_mode
+        self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
+        self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
+        self.ocp.solver_options.globalization = self.params.globalization
+        self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+        #self.ocp.solver_options.tol=self.params.tol
+
+
+        
+        self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(j) + '_' + self.model.amodel.name
+        self.ocp.code_export_directory = self.gen_name
+        solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json',generate=self.params.regenerate, build=self.params.regenerate)
+        self.solvers.append(solver)
+
+        self.model = self.simulator.model
+        # Last solver: common terminal constraint
+        self.ocp = AcadosOcp()
+
+        # Dimensions
+        self.ocp.solver_options.tf = self.params.T
+        self.ocp.dims.N = self.N
+
+        # Model
+        self.ocp.model = self.model.amodel
+
+        # Cost
+        self.Q = 1e-4 * np.eye(self.model.nx)
+        self.Q[0, 0] = 5e2
+        self.R = 1e-4 * np.eye(self.model.nu)
+
+        self.ocp.cost.W = lin.block_diag(self.Q, self.R)
+        self.ocp.cost.W_e = self.Q
+
+        self.ocp.cost.cost_type = "LINEAR_LS"
+        self.ocp.cost.cost_type_e = "LINEAR_LS"
+
+        self.ocp.cost.Vx = np.zeros((self.model.ny, self.model.nx))
+        self.ocp.cost.Vx[:self.model.nx, :self.model.nx] = np.eye(self.model.nx)
+        self.ocp.cost.Vu = np.zeros((self.model.ny, self.model.nu))
+        self.ocp.cost.Vu[self.model.nx:, :self.model.nu] = np.eye(self.model.nu)
+        self.ocp.cost.Vx_e = np.eye(self.model.nx)
+
+        self.ocp.cost.yref = np.zeros(self.model.ny)
+        self.ocp.cost.yref_e = np.zeros(self.model.nx)
+        # Set alpha to zero as default
+        self.ocp.parameter_values = np.array([0.])
+
+        # Constraints
+        self.ocp.constraints.lbx_0 = self.model.x_min
+        self.ocp.constraints.ubx_0 = self.model.x_max
+        self.ocp.constraints.idxbx_0 = np.arange(self.model.nx)
+
+        self.ocp.constraints.lbu = self.model.u_min
+        self.ocp.constraints.ubu = self.model.u_max
+        self.ocp.constraints.idxbu = np.arange(self.model.nu)
+        self.ocp.constraints.lbx = self.model.x_min
+        self.ocp.constraints.ubx = self.model.x_max
+        self.ocp.constraints.idxbx = np.arange(self.model.nx)
+
+        self.ocp.constraints.lbx_e = self.model.x_min
+        self.ocp.constraints.ubx_e = self.model.x_max
+        self.ocp.constraints.idxbx_e = np.arange(self.model.nx)
+
+        # Solver options
+        self.ocp.solver_options.tf = self.params.T
+        self.ocp.solver_options.nlp_solver_type = self.params.solver_type
+        self.ocp.solver_options.hpipm_mode = self.params.solver_mode
+        self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
+        self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
+        self.ocp.solver_options.globalization = self.params.globalization
+        self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+        #self.ocp.solver_options.tol=self.params.tol
+        # Terminal constraint
+        self.model.setNNmodel()
+        self.model.amodel.con_h_expr_e = self.model.nn_model
+
+        self.ocp.solver_options.model_external_shared_lib_dir = self.model.l4c_model.shared_lib_dir
+        self.ocp.solver_options.model_external_shared_lib_name = self.model.l4c_model.name
+
+        self.ocp.constraints.lh_e = np.array([0.])
+        self.ocp.constraints.uh_e = np.array([1e6])
+        if self.params.soft == True:
+            self.ocp.constraints.idxsh_e = np.array([0])
+            self.ocp.cost.zl_e = np.ones((1,)) * self.params.ws_t
+            self.ocp.cost.zu_e = np.zeros((1,))
+            self.ocp.cost.Zl_e = np.zeros((1,))
+            self.ocp.cost.Zu_e = np.zeros((1,))
+
+        self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(j+1) + '_' + self.model.amodel.name
+        self.ocp.code_export_directory = self.gen_name
+        solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', generate=self.params.regenerate,build=self.params.regenerate)
+        self.solvers.append(solver)
+
+        # Initialize guess
+        self.fails = 0
+        self.x_ref = np.zeros(self.model.nx)
+
+        # Empty initial guess and temp vectors
+        self.x_guess = np.zeros((self.N + 1, self.model.nx))
+        self.u_guess = np.zeros((self.N, self.model.nu))
+        self.x_temp, self.u_temp = np.copy(self.x_guess), np.copy(self.u_guess)
+
+        # Viable state (None for Naive and ST controllers)
+        self.x_viable = None
+
+        # Time stats
+        self.time_fields = ['time_lin', 'time_sim', 'time_qp', 'time_qp_solver_call',
+                            'time_glob', 'time_reg', 'time_tot']
+
+    def assign_problem(self,phase_ocp,pos,N):
+        # Dimensions
+        phase_ocp.dims.N = N
+
+        # Model
+        phase_ocp.model = deepcopy(self.model.amodel)
+        #phase_ocp.p_global=0
+
+        # Cost
+        self.Q = 1e-4 * np.eye(self.model.nx)
+        self.Q[0, 0] = 5e2
+        self.R = 1e-4 * np.eye(self.model.nu)
+
+        phase_ocp.cost.W = lin.block_diag(self.Q, self.R)
+
+        phase_ocp.cost.cost_type = "LINEAR_LS"
+
+        phase_ocp.cost.Vx = np.zeros((self.model.ny, self.model.nx))
+        phase_ocp.cost.Vx[:self.model.nx, :self.model.nx] = np.eye(self.model.nx)
+        phase_ocp.cost.Vu = np.zeros((self.model.ny, self.model.nu))
+        phase_ocp.cost.Vu[self.model.nx:, :self.model.nu] = np.eye(self.model.nu)
+
+        phase_ocp.cost.yref = np.zeros(self.model.ny)
+        # Set alpha to zero as default
+        phase_ocp.parameter_values = np.array([0.])
+        #phase_ocp.p_global_values = np.array([0.])
+
+        # Constraints
+        
+        phase_ocp.constraints.lbu = self.model.u_min
+        phase_ocp.constraints.ubu = self.model.u_max
+        phase_ocp.constraints.idxbu = np.arange(self.model.nu)
+        phase_ocp.constraints.lbx = self.model.x_min
+        phase_ocp.constraints.ubx = self.model.x_max
+        phase_ocp.constraints.idxbx = np.arange(self.model.nx)
+
+        if pos==0:
+            phase_ocp.constraints.lbx_0 = self.model.x_min
+            phase_ocp.constraints.ubx_0 = self.model.x_max
+            phase_ocp.constraints.idxbx_0 = np.arange(self.model.nx)
+
+        if pos ==1:
+            self.model.setNNmodel()
+            self.model.amodel.con_h_expr = self.model.nn_model
+            phase_ocp.model.con_h_expr = self.model.amodel.con_h_expr 
+            phase_ocp.constraints.lh = np.array([0.])
+            phase_ocp.constraints.uh = np.array([1e6])
+            if self.params.soft == True:
+                phase_ocp.constraints.idxsh = np.array([0])
+                phase_ocp.cost.zl = np.ones((1,))*self.params.ws_r
+                phase_ocp.cost.zu = np.zeros((1,))
+                phase_ocp.cost.Zl = np.zeros((1,))
+                phase_ocp.cost.Zu = np.zeros((1,))
+
+        if pos==2:
+            phase_ocp.cost.W_e = self.Q
+            phase_ocp.cost.cost_type_e = "LINEAR_LS"
+            phase_ocp.cost.Vx_e = np.eye(self.model.nx)
+            phase_ocp.cost.yref_e = np.zeros(self.model.nx)
+
+            phase_ocp.constraints.lbx_e = self.model.x_min
+            phase_ocp.constraints.ubx_e = self.model.x_max
+            phase_ocp.constraints.idxbx_e = np.arange(self.model.nx)
+            phase_ocp.model.con_h_expr = None
+
+            if self.parallel == None:
+                self.model.amodel.con_h_expr_e = self.model.nn_model
+                phase_ocp.model.con_h_expr_e = self.model.amodel.con_h_expr_e 
+                phase_ocp.constraints.lh_e = np.array([0.])
+                phase_ocp.constraints.uh_e = np.array([1e6])
+                
+                phase_ocp.constraints.idxsh_e = np.array([0])
+                phase_ocp.cost.zl_e = np.ones((1,))*self.params.ws_t
+                phase_ocp.cost.zu_e = np.zeros((1,))
+                phase_ocp.cost.Zl_e = np.zeros((1,))
+                phase_ocp.cost.Zu_e = np.zeros((1,))
+            
+        phase_ocp.model.name = f'phase_{pos}'
+
+        
+
+        # Additional settings, in general is an empty method
+        #self.additionalSetting()
+    def reinit_solver(self):
+        self.ocp_solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name +'.json', build=True,verbose=False)
+
+    def simulate_solver(self, x, u):
+        self.solver_integrator.set("x", x)
+        self.solver_integrator.set("u", u)
+        self.solver_integrator.solve()
+        x_next = self.solver_integrator.get("x")
+        return x_next
+    
+    def additionalSetting(self):
+        pass
+
+    def solve(self, x0):
+        # Reset current iterate
+        self.ocp_solver.reset()
+
+        # Constrain initial state
+        self.ocp_solver.constraints_set(0, "lbx", x0)
+        self.ocp_solver.constraints_set(0, "ubx", x0)
+
+        y_ref = np.zeros(self.model.ny)
+        y_ref[:self.model.nx] = self.x_ref
+        W = lin.block_diag(self.Q, self.R)
+
+        for i in range(self.N):
+            self.ocp_solver.set(i, 'x', self.x_guess[i])
+            self.ocp_solver.set(i, 'u', self.u_guess[i])
+            self.ocp_solver.cost_set(i, 'yref', y_ref, api='new')
+            self.ocp_solver.cost_set(i, 'W', W, api='new')
+        self.ocp_solver.set(0,'x',x0)
+
+        self.ocp_solver.set(self.N, 'x', self.x_guess[-1])
+        self.ocp_solver.cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+        self.ocp_solver.cost_set(self.N, 'W', self.Q, api='new')
+
+        # Solve the OCP
+        status = self.ocp_solver.solve()
+
+        # Save the temporary solution, independently of the status
+        for i in range(self.N):
+            self.x_temp[i] = self.ocp_solver.get(i, "x")
+            self.u_temp[i] = self.ocp_solver.get(i, "u")
+        self.x_temp[-1] = self.ocp_solver.get(self.N, "x")
+
+        return status
+
+    def provideControl(self):
+        """ Save the guess for the next MPC step and return u_opt[0] """
+        if self.fails > 0:
+            u = self.u_guess[0]
+            # Rollback the previous guess
+            #self.guessCorrection()
+            self.x_guess = np.roll(self.x_guess, -1, axis=0)
+            self.u_guess = np.roll(self.u_guess, -1, axis=0)
+            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+                self.x_guess[-1] = self.simulator.simulate(self.x_guess[-2],self.u_guess[-2])
+        else:
+            u = self.u_temp[0]
+            #self.x_guess = np.copy(self.x_temp)
+            #self.guessCorrection()
+            # Save the current temporary solution
+            self.x_guess = np.roll(self.x_temp, -1, axis=0)
+            self.u_guess = np.roll(self.u_temp, -1, axis=0)
+            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+                self.guessCorrection()
+                      
+        # Copy the last values        
+        if not('receding' in self.params.cont_type)  and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
+            self.x_guess[-1] = np.copy(self.x_guess[-2])
+        self.u_guess[-1] = np.copy(self.u_guess[-2])
+        return u
+
+    def step(self, x0):
+        pass
+
+    def setQRWeights(self, Q, R):
+        self.Q = Q
+        self.R = R
+
+    def setReference(self, x_ref):
+        self.x_ref = x_ref
+
+    def getTime(self,node):
+        pass
 
     def setGuess(self, x_guess, u_guess):
         self.x_guess = x_guess

@@ -74,13 +74,14 @@ class Parameters:
 
         self.nlp_max_iter = int(controller['nlp_max_iter'])
         self.qp_max_iter = int(controller['qp_max_iter'])
-        #self.solver_type ='SQP'# 'SQP_RTI' if rti else 'SQP'
+        self.solver_type ='SQP'# 'SQP_RTI' if rti else 'SQP'
         self.solver_type = 'SQP_RTI' if rti else 'SQP'
         self.solver_mode = controller['solver_mode']
         self.alpha = int(controller['alpha'])
         self.conv_tol = float(controller['conv_tol'])
         #self.globalization = 'MERIT_BACKTRACKING' #'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
         self.globalization = 'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
+        self.tol = 1e-5
 
         self.dt = float(controller[cont_type]['dt'])
         self.T = float(controller[cont_type]['T'])
@@ -88,6 +89,7 @@ class Parameters:
         self.min_negative_jump = int(controller['min_negative_jump'])
         self.err_thr = float(controller['traj_err_threshold'])
         self.bounds_tol = float(controller['bounds_tolerance'])
+        self.lm_reg = float(controller['lm_reg'])
         
         
 
@@ -104,6 +106,8 @@ class Parameters:
             if cont_type == 'parallel_limited':
                 self.ws_r = float(controller[cont_type]['ws_r'])
                 self.n_cores = int(controller[cont_type]['n_cores'])
+            if cont_type == 'receding_single':
+                self.soft = bool(controller[cont_type]['soft'])
 
         if cont_type == 'abort':
             self.q_dot_gain = float(controller[cont_type]['q_dot_gain'])

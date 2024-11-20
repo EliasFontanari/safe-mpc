@@ -10,7 +10,7 @@ from safe_mpc.abstract_multiphase import SimDynamics
 from safe_mpc.gravity_compensation import GravityCompensation
 from acados_template import AcadosOcpSolver
 from datetime import datetime
-
+import time
 
 def convergenceCriteria(x, mask=None):
     if mask is None:
@@ -34,15 +34,14 @@ def simulate_mpc(p):
     x_sim = np.empty((conf.n_steps + 1, model.nx)) * np.nan
     u = np.empty((conf.n_steps, model.nu)) * np.nan
     x_sim[0] = x0
-    simulator_state = x0
 
     controller.setGuess(x_guess_vec[p], u_guess_vec[p])
-    if 'parallel' in args['controller']:
-        controller.safe_hor = controller.N 
-        controller.alternative_x_guess = controller.x_guess
-        controller.alternative_u_guess = controller.u_guess
-    if args['controller'] == 'receding':
-        controller.r=controller.N
+    # if 'parallel' in args['controller']:
+    #     controller.safe_hor = controller.N 
+    #     controller.alternative_x_guess = controller.x_guess
+    #     controller.alternative_u_guess = controller.u_guess
+    # elif 'receding' in controller.params.cont_type:
+    #     controller.r=controller.N
     controller.fails = 0
     stats = []
     convergence = 0
@@ -50,37 +49,36 @@ def simulate_mpc(p):
     x_simu[p].append(x0)
 
     if 'parallel' in args['controller']:
+        controller.safe_hor = controller.N 
         safe = controller.safe_hor
         safe_hor_hist[p].append(safe)
-    elif args['controller'] == 'receding':
+    elif 'receding' in controller.params.cont_type:
+        controller.r=controller.N
         safe = controller.r
-        safe_hor_hist[p].append(safe)
     
     
     for k in range(conf.n_steps):        
-        if k ==54:
-            pass
         u[k] = controller.step(x_sim[k])
-        #stats.append(controller.getTime())
-        #simulator_state = controller.simulate_solver(x_sim[k], u[k])
+        stats.append(controller.getTime())
+            #simulator_state = controller.simulate_solver(x_sim[k], u[k])
         x_sim[k+1]=simulator.simulate(x_sim[k], u[k])
         #print(controller.x_viable-controller.simulator.checkSafeIntegrate([x_sim[k]],controller.u_guess,controller.safe_hor)[1])
         x_simu[p].append(x_sim[k + 1])
         u_simu[p].append(u[k])
 
-        with open(folder_name+'integration.txt', 'a') as file:
-            np.set_printoptions(precision=6)
-            file.write(f'solver state: {controller.x_guess[0]}\n')
-            file.write(f'simulator solver state: {x_sim[k+1]}\n')
-            file.write(f'simulator state: {simulator_state}\n')
-            file.write(f'difference: {np.abs(x_sim[k+1]-controller.x_guess[0])}\n')
-            file.write(f'control: {u[k]}\n')
-            if 'parallel' in args['controller']:
-                file.write(f'problem :{p} step: {k} safe_hor:{controller.safe_hor}\n')
-            if args['controller'] == 'receding':
-                file.write(f'problem :{p} step: {k} safe_hor:{controller.r}\n')
+        # with open(folder_name+'integration.txt', 'a') as file:
+        #     np.set_printoptions(precision=6)
+        #     file.write(f'solver state: {controller.x_guess[0]}\n')
+        #     file.write(f'simulator solver state: {x_sim[k+1]}\n')
+        #     file.write(f'simulator state: {simulator_state}\n')
+        #     file.write(f'difference: {np.abs(x_sim[k+1]-controller.x_guess[0])}\n')
+        #     file.write(f'control: {u[k]}\n')
+        #     if 'parallel' in args['controller']:
+        #         file.write(f'problem :{p} step: {k} safe_hor:{controller.safe_hor}\n')
+        #     if args['controller'] == 'receding':
+        #         file.write(f'problem :{p} step: {k} safe_hor:{controller.r}\n')
 
-        err_intgr = np.abs(x_sim[k+1]-controller.x_guess[0])
+        #err_intgr = np.abs(x_sim[k+1]-controller.x_guess[0])
         if 'parallel' in args['controller']:
             jump = controller.safe_hor - safe
             # if controller.safe_hor - safe > 6:
@@ -88,17 +86,17 @@ def simulate_mpc(p):
             safe = controller.safe_hor
             safe_hor_hist[p].append(safe)
             jumps.append(jump)
-            error_jumps[jump+1].append(err_intgr)
+            #error_jumps[jump+1].append(err_intgr)
             if controller.core_solution != None:
                 core_sol.append(controller.core_solution)
 
-        elif args['controller'] == 'receding':
+        elif 'receding' in args['controller']:
             jump = controller.r - safe
             safe = controller.r
             safe_hor_hist[p].append(safe)
             jumps.append(jump)
-            error_jumps[jump+1].append(np.abs(err_intgr))
-        errors[p].append(err_intgr)
+            #error_jumps[jump+1].append(np.abs(err_intgr))
+        #errors[p].append(err_intgr)
         # if controller.step_old_solution > 0:
         #     controller.guessCorrection()
         #     #controller.step_old_solution = 0
@@ -151,6 +149,7 @@ def simulate_mpc(p):
             print(f'{p}:{x0}=>Not converged\n')
             with open(folder_name+'integration.txt', 'a') as file:
                 file.write(f'{p}:{x0}=>Not converged\n')
+            convergence = None
     x_v = controller.getLastViableState()
     with open(folder_name+'integration.txt', 'a') as file:
         file.write('\n\n\n')
@@ -283,12 +282,14 @@ if __name__ == '__main__':
             x_feasible = np.load(conf.DATA_DIR + f'x_guess_vec_{conf.alpha}.npy')
             u_feasible = np.load(conf.DATA_DIR + f'u_guess_vec_{conf.alpha}.npy')
             # Try to refine the guess with respect to the controller used
-            for i in range(conf.test_num):
+            for i in range(len(x_init_vec)):
+                if i ==214:
+                    pass
                 controller.setGuess(x_feasible[i], u_feasible[i])
                 x_init = np.zeros((model.nx,))
                 x_init[:model.nq] = x_init_vec[i]
-                if 'receding_single' in args['controller']:
-                    controller.r = controller.N-1  
+                if 'receding' in args['controller']:
+                    controller.r = controller.N
                 status = controller.solve(x_init)
                 if (status == 0 or status == 2) and controller.checkGuess():
                     # Refinement successful
@@ -297,6 +298,7 @@ if __name__ == '__main__':
                     u_guess_vec.append(u_g)
                     successes.append(1)
                 else:
+                    print(i)
                     # Refinement failed, use the feasible guess
                     x_guess_vec.append(x_feasible[i])
                     u_guess_vec.append(u_feasible[i])
@@ -307,6 +309,8 @@ if __name__ == '__main__':
         print('Init guess success: %d over %d' % (sum(successes), conf.test_num))
 
     elif args['rti'] and args['controller']!= 'abort':
+        start = time.time()
+        print(data_name)
         x0_success = []
         violations=[]
         x0_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
@@ -318,12 +322,14 @@ if __name__ == '__main__':
             res.append(simulate_mpc(i))
             progress_bar.update(1)
         progress_bar.close()
+        end = time.time()
+        print(f'elapsed time: {(end-start)}')
         steps, conv_vec, x_sim_vec, t_stats, x_viable, u_sim_vec = zip(*res)
         steps = np.array(steps)
         conv_vec = np.array(conv_vec)
         idx = np.where(conv_vec == 1)[0]
         idx_abort = np.where(conv_vec == 0)[0]
-        print('Total convergence: %d over %d' % (np.sum(conv_vec), conf.test_num))
+        print('Total convergence: %d over %d' % (np.sum(conv_vec[conv_vec != None]), conf.test_num))
 
         print('99% quantile computation time:')
         times = np.array([t for arr in t_stats for t in arr])
@@ -331,7 +337,7 @@ if __name__ == '__main__':
             print(f"{field:<20} -> {t}")
         
         with open(folder_name+'integration.txt', 'a') as file:
-            file.write('Total convergence: %d over %d\n' % (np.sum(conv_vec), conf.test_num))
+            file.write('Total convergence: %d over %d\n' % (np.sum(conv_vec[conv_vec != None]), conf.test_num))
             for field, t in zip(controller.time_fields, np.quantile(times, 0.99, axis=0)):
                 file.write(f"{field:<20} -> {t}\n")
 

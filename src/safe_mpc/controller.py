@@ -1,6 +1,6 @@
 import numpy as np
 import scipy.linalg as lin
-from .abstract_multiphase import AbstractController
+from .abstract_multiphase import AbstractController, AbstractControllerSingle
 #from .abstract import AbstractController
 
 class NaiveController(AbstractController):
@@ -91,7 +91,6 @@ class RecedingController(STWAController):
 
     def additionalSetting(self):
         # Terminal constraint before, since it construct the nn model
-        #pass
         self.terminalConstraint()
         self.runningConstraint()
 
@@ -99,6 +98,7 @@ class RecedingController(STWAController):
         #self.ocp_solver.load_iterate('/home/utente/Documents/Optim/safe-mpc/triple_pendulum_iterate.json',verbose=False)
         # Reset current iterate
         self.ocp_solver.reset()
+
 
         # Constrain initial state
         self.ocp_solver.constraints_set(0, "lbx", x0)
@@ -147,13 +147,17 @@ class RecedingController(STWAController):
                 self.ocp_solver.cost_set(i, "zl", np.zeros((1,)))
         # Solve the OCP
         status = self.solve(x,[self.r,self.N])
+        #print(f'status = {status}')
+        #print(f'last solution: {np.round(self.solvers[self.r].get(self.N, "x"),4)}, node: {self.r}')
+
+
 
         r_new = -1
         for i in range(1, self.N + 1):
             if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
                 r_new = i 
         #or(status==2 and self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp))
-        if (status == 0) and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
+        if (status == 0 ) and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
             and r_new > 1 and self.simulator.checkSafeIntegrate([x],self.u_temp,r_new)[0]:
             
             self.fails = 0
@@ -173,24 +177,46 @@ class RecedingController(STWAController):
         self.r -= 1
         return self.provideControl()
 
-class RecedingSingleConstraint(RecedingController):
+class RecedingSingleConstraint(AbstractControllerSingle):
     def __init__(self, simulator):
         super().__init__(simulator)
-        self.r = self.N-1
+        self.r = self.N
         self.min_negative_jump = self.params.min_negative_jump
         self.step_old_solution = 0
 
+    def checkGuess(self):
+        return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
+               self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp)
+    
+    def getTime(self):
+        return np.array([self.solvers[self.r+1].get_stats(field) for field in self.time_fields])
+
+
+    def initialize(self, x0, u0=None):
+        # Trivial guess
+        self.x_guess = np.full((self.N + 1, self.model.nx), x0)
+        if u0 is None:
+            u0 = np.zeros(self.model.nu)
+        self.u_guess = np.full((self.N, self.model.nu), u0)
+        # Solve the OCP
+        status = self.solve(x0)
+        if (status == 0 or status==2) and self.checkGuess():
+            self.x_guess = np.copy(self.x_temp)
+            self.u_guess = np.copy(self.u_temp)
+            return 1
+        return 0
+    
     def additionalSetting(self):
         pass
 
     def solve(self, x0):
         #self.ocp_solver.load_iterate('/home/utente/Documents/Optim/safe-mpc/triple_pendulum_iterate.json',verbose=False)
         # Reset current iterate
-        self.solvers[self.r-1].reset()
+        self.solvers[self.r].reset()
 
         # Constrain initial state
-        self.solvers[self.r-1].constraints_set(0, "lbx", x0)
-        self.solvers[self.r-1].constraints_set(0, "ubx", x0)
+        self.solvers[self.r].constraints_set(0, "lbx", x0)
+        self.solvers[self.r].constraints_set(0, "ubx", x0)
 
         y_ref = np.zeros(self.model.ny)
         y_ref[:self.model.nx] = self.x_ref
@@ -198,44 +224,33 @@ class RecedingSingleConstraint(RecedingController):
 
         
         for i in range(self.N):
-            self.solvers[self.r-1].set(i, 'x', self.x_guess[i])
-            self.solvers[self.r-1].set(i, 'u', self.u_guess[i])
-            self.solvers[self.r-1].cost_set(i, 'yref', y_ref, api='new')
-            self.solvers[self.r-1].cost_set(i, 'W', W, api='new')
-        self.solvers[self.r-1].set(self.N, 'x', self.x_guess[-1])
-        self.solvers[self.r-1].set(0,'x',x0)
-        self.solvers[self.r-1].cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
-        self.solvers[self.r-1].cost_set(self.N, 'W', self.Q, api='new')
-
-        # if constr_nodes != None:
-        #     for i in range(1,self.N+1):
-        #         if np.all(np.array(constr_nodes) != i):
-        #             self.ocp_solver.set(i, 'sl', 1e4)
-        #             self.ocp_solver.set(i, 'su', 1e4)
+            self.solvers[self.r].set(i, 'x', self.x_guess[i])
+            self.solvers[self.r].set(i, 'u', self.u_guess[i])
+            self.solvers[self.r].cost_set(i, 'yref', y_ref, api='new')
+            self.solvers[self.r].cost_set(i, 'W', W, api='new')
+        self.solvers[self.r].set(self.N, 'x', self.x_guess[-1])
+        self.solvers[self.r].set(0,'x',x0)
+        self.solvers[self.r].cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+        self.solvers[self.r].cost_set(self.N, 'W', self.Q, api='new')
 
         # Solve the OCP
-        status = self.solvers[self.r-1].solve()
+        status = self.solvers[self.r].solve()
 
         # Save the temporary solution, independently of the status
         for i in range(self.N):
-            self.x_temp[i] = self.solvers[self.r-1].get(i, "x")
-            self.u_temp[i] = self.solvers[self.r-1].get(i, "u")
-        self.x_temp[-1] = self.solvers[self.r-1].get(self.N, "x")
+            self.x_temp[i] = self.solvers[self.r].get(i, "x")
+            self.u_temp[i] = self.solvers[self.r].get(i, "u")
+        self.x_temp[-1] = self.solvers[self.r].get(self.N, "x")
 
         return status
 
     def step(self, x):
-        # Terminal constraint
-        #self.solvers[self.r].cost_set(self.N, "zl", self.params.ws_t * np.ones((1,)))
-        # Receding constraint
-        #self.solvers[self.r].cost_set(self.r, "zl", self.params.ws_r * np.ones((1,)))
-        # for i in range(1, self.N):
-        #     if i != self.r:
-        #         # No constraints on other running states
-        #         self.solvers[self.r].cost_set(i, "zl", np.zeros((1,)))
-        # Solve the OCP
+        if self.r==10:
+            pass
         status = self.solve(x)
-
+        #rint(f'status = {status}')
+        #print(f'last solution: {np.round(self.solvers[self.r].get(self.N, "x"),4)}, node: {self.r}')
+        
         r_new = -1
         for i in range(1, self.N + 1):
             if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
