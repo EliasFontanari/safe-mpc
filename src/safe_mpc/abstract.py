@@ -345,7 +345,7 @@ class AbstractController:
             #self.guessCorrection()
             self.x_guess = np.roll(self.x_guess, -1, axis=0)
             self.u_guess = np.roll(self.u_guess, -1, axis=0)
-            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel' or self.params.cont_type== 'parallel_limited':
                 self.x_guess[-1] = self.simulator.simulate(self.x_guess[-2],self.u_guess[-2])
         else:
             u = self.u_temp[0]
@@ -354,11 +354,11 @@ class AbstractController:
             # Save the current temporary solution
             self.x_guess = np.roll(self.x_temp, -1, axis=0)
             self.u_guess = np.roll(self.u_temp, -1, axis=0)
-            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if self.params.cont_type == 'receding' or self.params.cont_type== 'parallel' or self.params.cont_type== 'parallel_limited':
                 self.guessCorrection()
                       
         # Copy the last values        
-        if self.params.cont_type != 'receding' and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
+        if self.params.cont_type != 'receding' and self.params.cont_type != 'parallel' and self.params.cont_type != 'parallel_limited':
             self.x_guess[-1] = np.copy(self.x_guess[-2])
         self.u_guess[-1] = np.copy(self.u_guess[-2])
         return u
