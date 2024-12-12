@@ -185,8 +185,9 @@ class AbstractController:
 
         self.ocp.cost.yref = np.zeros(self.model.ny)
         self.ocp.cost.yref_e = np.zeros(self.model.nx)
-        # Set alpha to zero as default
-        self.ocp.parameter_values = np.array([0.])
+
+        # Safety factor
+        self.ocp.parameter_values = np.array([self.params.alpha])
 
         # Constraints
         self.ocp.constraints.lbx_0 = self.model.x_min
