@@ -228,7 +228,7 @@ class ParallelWithCheck(RecedingController):
     def step(self,x):
         node_success = 0
         core = None
-        for i in self.constrains:
+        for i in reversed(self.constrains):
             result = self.sing_step(x,i)
             if result > node_success:
                 core = i
@@ -346,7 +346,7 @@ class ParallelLimited(ParallelWithCheck):
         if not(self.safe_hor in self.constrains):
             print('ERROR NOT PRESENT R\n\n\n\n\n\n')
         k=1
-        for i in self.constrains:
+        for i in reversed(self.constrains):
             #print(self.constrains)
             result = self.sing_step(x,int(i))
             if result > node_success:
