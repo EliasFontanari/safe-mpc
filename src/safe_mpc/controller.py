@@ -41,7 +41,7 @@ class STController(NaiveController):
         super().__init__(simulator)
 
     def additionalSetting(self):
-        self.terminalConstraint()
+        self.terminalConstraint(soft=False)
         #self.runningConstraint()
 
 
@@ -99,7 +99,9 @@ class RecedingController(STWAController):
         # Reset current iterate
         self.ocp_solver.reset()
 
-
+        for i in range(self.N+1):
+            self.ocp_solver.set(i,'p',self.params.alpha)
+            
         # Constrain initial state
         self.ocp_solver.constraints_set(0, "lbx", x0)
         self.ocp_solver.constraints_set(0, "ubx", x0)
@@ -170,6 +172,7 @@ class RecedingController(STWAController):
                 self.step_old_solution += 1
 
                 print("NOT SOLVED")
+                print(f'x viable:{self.x_viable}')
                 print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
                 
                 return None
@@ -183,6 +186,11 @@ class RecedingSingleConstraint(AbstractControllerSingle):
         self.r = self.N
         self.min_negative_jump = self.params.min_negative_jump
         self.step_old_solution = 0
+
+    def setGuess(self, x_guess, u_guess):
+        self.x_guess = x_guess
+        self.u_guess = u_guess
+        self.x_viable = x_guess[-1]
 
     def checkGuess(self):
         return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
@@ -209,14 +217,18 @@ class RecedingSingleConstraint(AbstractControllerSingle):
     def additionalSetting(self):
         pass
 
-    def solve(self, x0):
+    def solve(self, x0,solver_n=None):
+        if solver_n == None:
+            solver_n = self.r
+
         #self.ocp_solver.load_iterate('/home/utente/Documents/Optim/safe-mpc/triple_pendulum_iterate.json',verbose=False)
         # Reset current iterate
-        self.solvers[self.r].reset()
-
+        self.solvers[solver_n].reset()
+        for i in range(self.N+1):
+            self.solvers[solver_n].set(i,'p',self.params.alpha)
         # Constrain initial state
-        self.solvers[self.r].constraints_set(0, "lbx", x0)
-        self.solvers[self.r].constraints_set(0, "ubx", x0)
+        self.solvers[solver_n].constraints_set(0, "lbx", x0)
+        self.solvers[solver_n].constraints_set(0, "ubx", x0)
 
         y_ref = np.zeros(self.model.ny)
         y_ref[:self.model.nx] = self.x_ref
@@ -224,23 +236,23 @@ class RecedingSingleConstraint(AbstractControllerSingle):
 
         
         for i in range(self.N):
-            self.solvers[self.r].set(i, 'x', self.x_guess[i])
-            self.solvers[self.r].set(i, 'u', self.u_guess[i])
-            self.solvers[self.r].cost_set(i, 'yref', y_ref, api='new')
-            self.solvers[self.r].cost_set(i, 'W', W, api='new')
-        self.solvers[self.r].set(self.N, 'x', self.x_guess[-1])
-        self.solvers[self.r].set(0,'x',x0)
-        self.solvers[self.r].cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
-        self.solvers[self.r].cost_set(self.N, 'W', self.Q, api='new')
+            self.solvers[solver_n].set(i, 'x', self.x_guess[i])
+            self.solvers[solver_n].set(i, 'u', self.u_guess[i])
+            self.solvers[solver_n].cost_set(i, 'yref', y_ref, api='new')
+            self.solvers[solver_n].cost_set(i, 'W', W, api='new')
+        self.solvers[solver_n].set(self.N, 'x', self.x_guess[-1])
+        self.solvers[solver_n].set(0,'x',x0)
+        self.solvers[solver_n].cost_set(self.N, 'yref', y_ref[:self.model.nx], api='new')
+        self.solvers[solver_n].cost_set(self.N, 'W', self.Q, api='new')
 
         # Solve the OCP
-        status = self.solvers[self.r].solve()
+        status = self.solvers[solver_n].solve()
 
         # Save the temporary solution, independently of the status
         for i in range(self.N):
-            self.x_temp[i] = self.solvers[self.r].get(i, "x")
-            self.u_temp[i] = self.solvers[self.r].get(i, "u")
-        self.x_temp[-1] = self.solvers[self.r].get(self.N, "x")
+            self.x_temp[i] = self.solvers[solver_n].get(i, "x")
+            self.u_temp[i] = self.solvers[solver_n].get(i, "u")
+        self.x_temp[-1] = self.solvers[solver_n].get(self.N, "x")
 
         return status
 
@@ -256,7 +268,7 @@ class RecedingSingleConstraint(AbstractControllerSingle):
             if self.model.checkSafeConstraints(self.x_temp[i]) and (i - self.r) >= self.min_negative_jump:
                 r_new = i 
         #or(status==2 and self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp))
-        if (status == 0) and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
+        if (status == 0 ) and self.model.checkRunningConstraints(self.x_temp, self.u_temp) \
             and r_new > 1 and self.simulator.checkSafeIntegrate([x],self.u_temp,r_new)[0]:
             
             self.fails = 0
@@ -280,9 +292,11 @@ class RecedingSingleConstraint(AbstractControllerSingle):
 class ParallelWithCheck(RecedingController):    
     def __init__(self, simulator):
         super().__init__(simulator)
-        self.safe_hor = self.N
+        self.r = self.N
         self.core_solution=0
-        self.constrains =  np.linspace(1,self.N,self.N).round().astype(int).tolist()   
+        self.constraints =  np.linspace(1,self.N,self.N).round().astype(int).tolist() 
+        self.times=[]
+          
 
     def checkGuess(self):
         return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
@@ -319,7 +333,7 @@ class ParallelWithCheck(RecedingController):
 
 
         if success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
-           (n_step_safe-self.safe_hor)>= self.min_negative_jump:
+           (n_step_safe-self.r)>= self.min_negative_jump:
             
             success = True
             
@@ -331,10 +345,12 @@ class ParallelWithCheck(RecedingController):
         return n_step_safe if success else 0
 
     def step(self,x):
+        self.times=[]
         node_success = 0
         core = None
-        for i in self.constrains:
+        for i in reversed(self.constraints):
             result = self.sing_step(x,i)
+            self.times.append(np.array([self.ocp_solver.get_stats(field) for field in self.time_fields]))
             if result > node_success:
                 core = i
                 node_success = result
@@ -345,7 +361,7 @@ class ParallelWithCheck(RecedingController):
         if node_success > 1:
             self.core_solution = core
             self.step_old_solution = 0
-            self.safe_hor = node_success
+            self.r = node_success
             self.x_temp = tmp_x
             self.u_temp = tmp_u
             self.fails = 0
@@ -353,109 +369,192 @@ class ParallelWithCheck(RecedingController):
             self.core_solution = None 
             self.step_old_solution +=1
             self.fails = 1
-            if self.safe_hor ==1:
+            if self.r ==1:
                 print("NOT SOLVED")
-                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
+                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.r)
+                print(f'x viable:{self.x_viable}')
+                print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
+                return None
+        self.r -= 1
+
+        return self.provideControl()
+    
+class ParallelSingleConstraint(RecedingSingleConstraint):
+    def __init__(self, simulator):
+        super().__init__(simulator)
+        self.constraints =  np.linspace(1,self.N,self.N).round().astype(int).tolist()   
+        self.times = []
+
+    def checkGuess(self):
+        return self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
+               self.simulator.checkDynamicsConstraints(self.x_temp, self.u_temp) and \
+               self.model.checkSafeConstraints(self.x_temp[-1])
+
+    def check_safe_n(self):
+        r=0
+        for i in range(1, self.N + 1):
+            if self.model.checkSafeConstraints(self.x_temp[i]):
+                r = i
+        return r
+
+
+    def sing_step(self, x, n_constr):
+        success = False
+        status = self.solve(x,n_constr)
+        checked_r = self.check_safe_n()
+        if ((check:=self.model.checkSafeConstraints(self.x_temp[n_constr])) or checked_r > 1) \
+            and (status==0 ):
+            constr_ver = n_constr if check else 0
+            n_step_safe = max(checked_r,constr_ver)
+            safe, x_safe = self.simulator.checkSafeIntegrate([x],self.u_temp,n_step_safe)
+            if safe:
+                success = True
+
+
+        if success and self.model.checkRunningConstraints(self.x_temp, self.u_temp) and \
+           (n_step_safe-self.r)>= self.min_negative_jump:
+            
+            success = True
+            
+
+
+        else:
+            success = False
+
+        return n_step_safe if success else 0
+
+    def step(self,x):
+        self.times=[]
+        node_success = 0
+        core = None
+        for i in reversed(self.constraints):
+            result = self.sing_step(x,i)
+            self.times.append(np.array([self.solvers[i].get_stats(field) for field in self.time_fields]))
+            if result > node_success:
+                core = i
+                node_success = result
+                tmp_x = np.copy(self.x_temp)
+                tmp_u = np.copy(self.u_temp)
+                if result==self.N:
+                    break
+        if node_success > 1:
+            self.core_solution = core
+            self.step_old_solution = 0
+            self.r = node_success
+            self.x_temp = tmp_x
+            self.u_temp = tmp_u
+            self.fails = 0
+        else: 
+            self.core_solution = None 
+            self.step_old_solution +=1
+            self.fails = 1
+            if self.r ==1:
+                print("NOT SOLVED")
+                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.r)
                 print(self.x_viable)
                 print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
                 return None
-        self.safe_hor -= 1
+        self.r -= 1
 
         return self.provideControl()
+    
+    def getTime(self):
+        pass
+        #return self.times
 
 class ParallelLimited(ParallelWithCheck):
     def __init__(self,simulator):
         super().__init__(simulator)
         self.cores = self.params.n_cores
-        self.constrains = []
-        self.constraint_mode = self.high_nodes_constraint                # choose mode
+        self.constraints = []
+        self.constraint_mode = self.CIS_distance_constraint                # choose mode
 
     def high_nodes_constraint(self):
-        self.constrains = []
-        self.constrains.append(self.safe_hor)
+        self.constraints = []
+        self.constraints.append(self.r)
         i,j=0,0
         while i < self.cores - 1:
-            if self.N -j != self.safe_hor:
-                self.constrains.append(self.N - j)
+            if self.N -j != self.r:
+                self.constraints.append(self.N - j)
                 i +=1
             j +=1
-        self.constrains = sorted(self.constrains)
+        self.constraints = sorted(self.constraints)
 
     def uniform_constraint(self):
         if self.cores == self.N:
-            self.constrains = np.linspace(1,self.N,self.cores).round().astype(int).tolist()    
+            self.constraints = np.linspace(1,self.N,self.cores).round().astype(int).tolist()    
         else: 
-            self.constrains = []
+            self.constraints = []
             step = (self.N-1)/self.cores
-            if self.safe_hor == 1 or self.safe_hor == self.N:
-                self.constrains = np.linspace(1,self.N,self.cores).round().astype(int).tolist()
+            if self.r == 1 or self.r == self.N:
+                self.constraints = np.linspace(1,self.N,self.cores).round().astype(int).tolist()
             else:
-                if self.safe_hor < 1 + step:
+                if self.r < 1 + step:
                     i=1
-                    self.constrains.append(self.safe_hor)
+                    self.constraints.append(self.r)
                     while i < self.cores:
-                        self.constrains.append(int(min(self.N,round(self.safe_hor + i*step))))
+                        self.constraints.append(int(min(self.N,round(self.r + i*step))))
                         i+=1
-                elif self.safe_hor >  self.N - step:
+                elif self.r >  self.N - step:
                     i=1
-                    self.constrains.append(self.safe_hor)
+                    self.constraints.append(self.r)
                     while i < self.cores:                        
-                        self.constrains.insert(0,int(max(1,round(self.safe_hor - i*step))))
+                        self.constraints.insert(0,int(max(1,round(self.r - i*step))))
                         i+=1
                 else:
-                    self.constrains=[] 
-                    self.constrains.append(self.safe_hor)
-                    portion_h = (self.cores-1)*((self.N - self.safe_hor)/(self.N-1))
+                    self.constraints=[] 
+                    self.constraints.append(self.r)
+                    portion_h = (self.cores-1)*((self.N - self.r)/(self.N-1))
                     portion_h = int(portion_h) if portion_h-int(portion_h)<=0.5 else int(portion_h+1)
-                    portion_l = (self.cores-1)*((self.safe_hor-1)/(self.N-1))
+                    portion_l = (self.cores-1)*((self.r-1)/(self.N-1))
                     portion_l = int(portion_l) if portion_l-int(portion_l)<=0.5 else int(portion_l+1)
                     if portion_h == portion_l and self.cores%2==0 or portion_h +portion_l < self.cores -1:
-                        self.constrains = np.linspace(int(max(1,round(self.safe_hor-portion_l*step))),round(self.safe_hor-step),portion_l).round().astype(int).tolist() + self.constrains \
-                            + np.linspace(round(self.safe_hor+step),self.N,portion_h+1).round().astype(int).tolist()
+                        self.constraints = np.linspace(int(max(1,round(self.r-portion_l*step))),round(self.r-step),portion_l).round().astype(int).tolist() + self.constraints \
+                            + np.linspace(round(self.r+step),self.N,portion_h+1).round().astype(int).tolist()
                     else: 
-                        self.constrains_l = []
-                        self.constrains_h = []
+                        self.constraints_l = []
+                        self.constraints_h = []
                         i,j=1,1
                         while i < portion_l+1:
-                            self.constrains_l.insert(0,int(max(1,round(self.safe_hor - i*step))))
+                            self.constraints_l.insert(0,int(max(1,round(self.r - i*step))))
                             i+=1
                         while j < portion_h+1:
-                            self.constrains_h.append(int(min(self.N,round(self.safe_hor + j*step)))) 
+                            self.constraints_h.append(int(min(self.N,round(self.r + j*step)))) 
                             j+=1
-                        self.constrains = self.constrains_l+self.constrains+self.constrains_h
+                        self.constraints = self.constraints_l+self.constraints+self.constraints_h
 
 
     def CIS_distance_constraint(self):
-        self.constrains=[]
-        self.constrains.append(self.safe_hor)
+        self.constraints=[]
+        self.constraints.append(self.r)
         distances=[]
         for i in range(1,self.N+1):
             distances.append(self.model.nn_func(self.x_guess[i], self.params.alpha))
         indx_sorted = np.argsort(np.array(distances).squeeze())[::-1]
         i,j = 0,0
         while i < self.cores - 1:
-            if (indx_sorted[j]+1)!=self.safe_hor:
-                self.constrains.append(indx_sorted[j]+1)
+            if (indx_sorted[j]+1)!=self.r:
+                self.constraints.append(indx_sorted[j]+1)
                 i+=1 
             j+=1
-        self.constrains = sorted(self.constrains)
+        self.constraints = sorted(self.constraints)
     
     def step(self,x):
         node_success = 0
         core = None
         self.constraint_mode()
-        if len(self.constrains) != self.cores or len(self.constrains) != len(set(self.constrains)):
-            print(self.safe_hor)
+        if len(self.constraints) != self.cores or len(self.constraints) != len(set(self.constraints)):
+            print(self.r)
             print('ERROR\n\n\n\n\n\n')
-            print(self.constrains)
-        if not(self.safe_hor in self.constrains):
+            print(self.constraints)
+        if not(self.r in self.constraints):
             print('ERROR NOT PRESENT R\n\n\n\n\n\n')
         k=1
-        for i in self.constrains:
-            #print(self.constrains)
+        for i in reversed(self.constraints):
+            #print(self.constraints)
             result = self.sing_step(x,int(i))
             if result > node_success:
-                #print(self.constrains)
+                #print(self.constraints)
                 
                 core = k
                 node_success = result
@@ -467,7 +566,7 @@ class ParallelLimited(ParallelWithCheck):
         if node_success > 1:
             self.core_solution = core
             self.step_old_solution = 0
-            self.safe_hor = node_success
+            self.r = node_success
             self.x_temp = tmp_x
             self.u_temp = tmp_u
             self.fails = 0
@@ -475,13 +574,13 @@ class ParallelLimited(ParallelWithCheck):
             self.core_solution = None 
             self.step_old_solution +=1
             self.fails = 1
-            if self.safe_hor ==1:
+            if self.r ==1:
                 print("NOT SOLVED")
-                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
-                print(self.x_viable)
+                _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.r)
+                print(f'x viable:{self.x_viable}')
                 print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
                 return None
-        self.safe_hor -= 1
+        self.r -= 1
 
 
         return self.provideControl()
@@ -493,6 +592,7 @@ class SafeBackupController(AbstractController):
     def additionalSetting(self):
         self.Q = np.zeros((self.model.nx, self.model.nx))
         self.Q[self.model.nq:, self.model.nq:] = np.eye(self.model.nv) * self.params.q_dot_gain
+        #self.R = 0e-4 * np.eye(self.model.nu)
 
         self.ocp.cost.W = lin.block_diag(self.Q, self.R)
         self.ocp.cost.W_e = self.Q
@@ -515,84 +615,84 @@ class SafeBackupController(AbstractController):
 #     def __init__(self,simulator):
 #         super().__init__(simulator)
 #         self.cores = self.params.n_cores
-#         self.constrains = []
+#         self.constraints = []
 #         self.constraint_mode = self.high_nodes_constraint
 
 #     def high_nodes_constraint(self):
-#         self.constrains = []
-#         self.constrains.append(self.safe_hor)
+#         self.constraints = []
+#         self.constraints.append(self.r)
 #         i,j=0,0
 #         while i < self.cores - 1:
-#             if self.N -j != self.safe_hor:
-#                 self.constrains.append(self.N - j)
+#             if self.N -j != self.r:
+#                 self.constraints.append(self.N - j)
 #                 i +=1
 #             j +=1
-#         self.constrains = sorted(self.constrains,reverse=True)
+#         self.constraints = sorted(self.constraints,reverse=True)
 
 #     def uniform_constraint(self):
-#         self.constrains=[]
-#         self.constrains.append(self.safe_hor)
-#         low_alloc = int((self.cores)*((self.safe_hor-1)/(self.N-1)))
-#         high_alloc = int((self.cores)*((self.N-self.safe_hor)/(self.N-1)))
+#         self.constraints=[]
+#         self.constraints.append(self.r)
+#         low_alloc = int((self.cores)*((self.r-1)/(self.N-1)))
+#         high_alloc = int((self.cores)*((self.N-self.r)/(self.N-1)))
 #         if low_alloc - high_alloc == 0 and low_alloc%2!=0:
 #             #low_alloc -= 1
-#             low_constr = np.linspace(1,self.safe_hor,low_alloc+1).round().astype(int)
-#             high_constr = np.linspace(self.safe_hor,self.N,high_alloc+1).round().astype(int)
+#             low_constr = np.linspace(1,self.r,low_alloc+1).round().astype(int)
+#             high_constr = np.linspace(self.r,self.N,high_alloc+1).round().astype(int)
 #             for i in range(low_alloc):
-#                 self.constrains.append(int(low_constr[i]))
+#                 self.constraints.append(int(low_constr[i]))
 #             for i in range(high_alloc):
-#                 self.constrains.append(int(high_constr[-1-i]))
+#                 self.constraints.append(int(high_constr[-1-i]))
 #         elif low_alloc - high_alloc == 0 and low_alloc%2==0:
 #             low_alloc -= 1
-#             low_constr = np.linspace(1,self.safe_hor,low_alloc+1).round().astype(int)
-#             high_constr = np.linspace(self.safe_hor,self.N,high_alloc+1).round().astype(int)
+#             low_constr = np.linspace(1,self.r,low_alloc+1).round().astype(int)
+#             high_constr = np.linspace(self.r,self.N,high_alloc+1).round().astype(int)
 #             for i in range(low_alloc):
-#                 self.constrains.append(int(low_constr[i]))
+#                 self.constraints.append(int(low_constr[i]))
 #             for i in range(high_alloc):
-#                 self.constrains.append(int(high_constr[-1-i]))
+#                 self.constraints.append(int(high_constr[-1-i]))
 #         else:
 #             if high_alloc + low_alloc == self.cores and low_alloc == 0:
 #                 high_alloc -=1
 #             elif high_alloc + low_alloc == self.cores and high_alloc == 0:
 #                 low_alloc -=1
-#             low_constr = np.linspace(1,self.safe_hor,low_alloc+1).round().astype(int)
-#             high_constr = np.linspace(self.safe_hor,self.N,high_alloc+1).round().astype(int)
+#             low_constr = np.linspace(1,self.r,low_alloc+1).round().astype(int)
+#             high_constr = np.linspace(self.r,self.N,high_alloc+1).round().astype(int)
 #             for i in range(low_alloc):
-#                 self.constrains.append(int(low_constr[i]))
+#                 self.constraints.append(int(low_constr[i]))
 #             for i in range(high_alloc):
-#                 self.constrains.append(int(high_constr[-1-i]))
-#         self.constrains = sorted(self.constrains,reverse=True)
+#                 self.constraints.append(int(high_constr[-1-i]))
+#         self.constraints = sorted(self.constraints,reverse=True)
 
 
 #     def CSI_distance_constraint(self):
-#         self.constrains=[]
-#         self.constrains.append(self.safe_hor)
+#         self.constraints=[]
+#         self.constraints.append(self.r)
 #         distances=[]
 #         for i in range(1,self.N+1):
 #             distances.append(self.model.nn_func(self.x_guess[i], self.params.alpha))
 #         indx_sorted = np.argsort(np.array(distances).squeeze())[::-1]
 #         i,j = 0,0
 #         while i < self.cores - 1:
-#             if (indx_sorted[j]+1)!=self.safe_hor:
+#             if (indx_sorted[j]+1)!=self.r:
 #                 # if indx_sorted[j]==0:
 #                 #     pass
-#                 self.constrains.append(indx_sorted[j]+1)
+#                 self.constraints.append(indx_sorted[j]+1)
 #                 i+=1 
 #             j+=1
-#         self.constrains = sorted(self.constrains,reverse=True)
+#         self.constraints = sorted(self.constraints,reverse=True)
     
 #     def step(self,x):
 #         self.constraint_mode()
-#         if len(self.constrains) != self.cores or len(self.constrains) != len(set(self.constrains)):
-#             print(self.safe_hor)
+#         if len(self.constraints) != self.cores or len(self.constraints) != len(set(self.constraints)):
+#             print(self.r)
 #             print('ERROR')
-#             print(self.constrains)
-#         # print(self.safe_hor)
-#         #print(self.constrains)
+#             print(self.constraints)
+#         # print(self.r)
+#         #print(self.constraints)
 #         i = 0
 #         failed = True
-#         while (i < self.cores and (failed:=not(self.sing_step(x,int(self.constrains[i]))))):
-#             #print(self.constrains[i])
+#         while (i < self.cores and (failed:=not(self.sing_step(x,int(self.constraints[i]))))):
+#             #print(self.constraints[i])
 #             i+=1
 #         if not(failed):
 #             self.core_solution = self.cores-i+1
@@ -600,13 +700,13 @@ class SafeBackupController(AbstractController):
 #         else:
 #             self.core_solution = None 
 #             self.step_old_solution +=1
-#         if self.safe_hor ==1:
+#         if self.r ==1:
 #             print("NOT SOLVED")
-#             _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.safe_hor)
+#             _,self.x_viable = self.simulator.checkSafeIntegrate([x],self.u_guess,self.r)
 #             print(self.x_viable)
 #             print(f'is x viable:{self.model.nn_func(self.x_viable,self.model.params.alpha)}')
 #             return None
-#         self.safe_hor -= 1
+#         self.r -= 1
 #         #self.guessCorrection()
 #         return self.provideControl()
 

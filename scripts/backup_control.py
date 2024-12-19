@@ -45,11 +45,11 @@ if __name__ == '__main__':
     
     # Set in variable abort the controller's states on which execute the backup control, between the keys in the above dictionary.
     
-    abort = 'parallel'
+    abort = 'parallel_limited'
     if abort == 'parallel_limited':
         # mode CIS, uni or high
-        mode = 'uni'
-        cores = 16
+        mode = 'CIS'
+        cores = 4
     min_jump = 0
     
     concluded = True    
@@ -101,6 +101,9 @@ if __name__ == '__main__':
     closeness_success,closeness_failed = [],[]
     convergence_index = []
     for i in range(n_a):
+        # x_viable[i][0] = x_viable[i][0] -0.03
+        # x_viable[i][1] = x_viable[i][1] +0.03
+
         print(f'{i} x_viable={x_viable[i]} \n')
         print(f'{i} convergence_criteria={convergenceCriteria(x_viable[i])} \n')
         convergence_index.append(convergenceCriteria(x_viable[i]))

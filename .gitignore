@@ -21,3 +21,5 @@ scripts/backup_random.py
 *.json
 src/safe_mpc/plut.py
 data (copy)/*
+data (another copy)/*
+data22/*

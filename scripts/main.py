@@ -37,7 +37,7 @@ def simulate_mpc(p):
 
     controller.setGuess(x_guess_vec[p], u_guess_vec[p])
     # if 'parallel' in args['controller']:
-    #     controller.safe_hor = controller.N 
+    #     controller.r = controller.N 
     #     controller.alternative_x_guess = controller.x_guess
     #     controller.alternative_u_guess = controller.u_guess
     # elif 'receding' in controller.params.cont_type:
@@ -49,8 +49,8 @@ def simulate_mpc(p):
     x_simu[p].append(x0)
 
     if 'parallel' in args['controller']:
-        controller.safe_hor = controller.N 
-        safe = controller.safe_hor
+        controller.r = controller.N 
+        safe = controller.r
         safe_hor_hist[p].append(safe)
     elif 'receding' in controller.params.cont_type:
         controller.r=controller.N
@@ -59,10 +59,14 @@ def simulate_mpc(p):
     
     for k in range(conf.n_steps):        
         u[k] = controller.step(x_sim[k])
-        stats.append(controller.getTime())
+        if not('parallel' in  controller.params.cont_type):     
+            stats.append(controller.getTime())
+        else:
+            for l in range(len(controller.times)):
+                stats.append(controller.times[l])
             #simulator_state = controller.simulate_solver(x_sim[k], u[k])
         x_sim[k+1]=simulator.simulate(x_sim[k], u[k])
-        #print(controller.x_viable-controller.simulator.checkSafeIntegrate([x_sim[k]],controller.u_guess,controller.safe_hor)[1])
+        #print(controller.x_viable-controller.simulator.checkSafeIntegrate([x_sim[k]],controller.u_guess,controller.r)[1])
         x_simu[p].append(x_sim[k + 1])
         u_simu[p].append(u[k])
 
@@ -74,16 +78,16 @@ def simulate_mpc(p):
         #     file.write(f'difference: {np.abs(x_sim[k+1]-controller.x_guess[0])}\n')
         #     file.write(f'control: {u[k]}\n')
         #     if 'parallel' in args['controller']:
-        #         file.write(f'problem :{p} step: {k} safe_hor:{controller.safe_hor}\n')
+        #         file.write(f'problem :{p} step: {k} safe_hor:{controller.r}\n')
         #     if args['controller'] == 'receding':
         #         file.write(f'problem :{p} step: {k} safe_hor:{controller.r}\n')
 
         #err_intgr = np.abs(x_sim[k+1]-controller.x_guess[0])
         if 'parallel' in args['controller']:
-            jump = controller.safe_hor - safe
-            # if controller.safe_hor - safe > 6:
+            jump = controller.r - safe
+            # if controller.r - safe > 6:
             #     print(f'new hor at problem :{p} step: {k}\n')
-            safe = controller.safe_hor
+            safe = controller.r
             safe_hor_hist[p].append(safe)
             jumps.append(jump)
             #error_jumps[jump+1].append(err_intgr)
@@ -118,8 +122,8 @@ def simulate_mpc(p):
         #     violation_min = (x_sim[k+1]<controller.model.x_min)
         #     # for i in range(violation_max.shape[0]):
         #     #     if args['controller'] == 'parallel' or args['controller'] == 'parallel2':
-        #     #         if violation_max[i]: print(f'no tol upper bounds violated of : {x_sim[k+1][i]-controller.model.x_max[i]}, safe_hor = {controller.safe_hor}, state={i}\n')
-        #     #         if violation_min[i]: print(f'no tol lower bounds violated of : {-x_sim[k+1][i]+controller.model.x_min[i]}, safe_hor = {controller.safe_hor}, state ={i}\n')
+        #     #         if violation_max[i]: print(f'no tol upper bounds violated of : {x_sim[k+1][i]-controller.model.x_max[i]}, safe_hor = {controller.r}, state={i}\n')
+        #     #         if violation_min[i]: print(f'no tol lower bounds violated of : {-x_sim[k+1][i]+controller.model.x_min[i]}, safe_hor = {controller.r}, state ={i}\n')
         if not model.checkStateConstraints(x_sim[k + 1]):
             if args['controller'] == 'receding':
                 print(controller.r)
@@ -132,8 +136,8 @@ def simulate_mpc(p):
                 violation_max = (x_sim[k+1]>controller.model.x_max)
                 violation_min = (x_sim[k+1]<controller.model.x_min)
                 for i in range(violation_max.shape[0]):
-                    if violation_max[i]: violations.append([x_sim[k+1][i]-controller.model.x_max[i],p,k])#,controller.safe_hor])
-                    if violation_min[i]: violations.append([-x_sim[k+1][i]+controller.model.x_min[i],p,k])#,controller.safe_hor])
+                    if violation_max[i]: violations.append([x_sim[k+1][i]-controller.model.x_max[i],p,k])#,controller.r])
+                    if violation_min[i]: violations.append([-x_sim[k+1][i]+controller.model.x_min[i],p,k])#,controller.r])
                 # print(f'control={u[k]}, state={x_sim[k+1]}\n')
                 # print(k)
             break
@@ -169,6 +173,7 @@ if __name__ == '__main__':
                              'receding_single':'RecedingSingleConstraint',
                              'parallel': 'ParallelWithCheck',
                              'parallel_limited':'ParallelLimited',
+                             'parallel_single':'ParallelSingleConstraint',
                              'abort': 'SafeBackupController'}
     if args['init_conditions']:
         args['controller'] = 'receding'
@@ -222,8 +227,8 @@ if __name__ == '__main__':
         u_bounds = model.x_max[:model.nq] - conf.state_tol
 
         # Soft constraints on all the trajectory
-        for i in range(1, controller.N):
-            controller.ocp_solver.cost_set(i, "zl", conf.ws_r * np.ones((1,)))
+        # for i in range(1, controller.N):
+        #     controller.ocp_solver.cost_set(i, "zl", conf.ws_r * np.ones((1,)))
         controller.ocp_solver.cost_set(controller.N, "zl", conf.ws_t * np.ones((1,)))
 
         bins = 10
@@ -270,7 +275,7 @@ if __name__ == '__main__':
     elif args['guess']:
         x_init_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
         x_guess_vec, u_guess_vec, successes = [], [], []
-        progress_bar = tqdm(total=conf.test_num, desc='Init guess processing')
+        progress_bar = tqdm(total=len(x_init_vec), desc='Init guess processing')
         if args['controller'] in ['naive', 'st']:
             for x_init in x_init_vec:
                 (x_g, u_g), status = init_guess(x_init)
@@ -288,8 +293,8 @@ if __name__ == '__main__':
                 controller.setGuess(x_feasible[i], u_feasible[i])
                 x_init = np.zeros((model.nx,))
                 x_init[:model.nq] = x_init_vec[i]
-                if 'receding' in args['controller']:
-                    controller.r = controller.N
+                # if 'receding' in args['controller']:
+                #     controller.r = controller.N
                 status = controller.solve(x_init)
                 if (status == 0 or status == 2) and controller.checkGuess():
                     # Refinement successful
@@ -299,6 +304,7 @@ if __name__ == '__main__':
                     successes.append(1)
                 else:
                     print(i)
+                    print('failed')
                     # Refinement failed, use the feasible guess
                     x_guess_vec.append(x_feasible[i])
                     u_guess_vec.append(u_feasible[i])
@@ -340,6 +346,7 @@ if __name__ == '__main__':
             file.write('Total convergence: %d over %d\n' % (np.sum(conv_vec[conv_vec != None]), conf.test_num))
             for field, t in zip(controller.time_fields, np.quantile(times, 0.99, axis=0)):
                 file.write(f"{field:<20} -> {t}\n")
+            file.write(f"{controller.params.cont_type} soft: {controller.params.soft}\n")
 
         # Save last viable states (useful only for terminal/receding controllers)
         np.save(data_name + 'x_viable.npy', np.asarray(x_viable)[idx_abort])

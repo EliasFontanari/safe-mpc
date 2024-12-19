@@ -2,19 +2,19 @@
 test_num: 500             # number of tests
 n_steps: 600              # number of time steps in each test
 cpu_num: 20
-regenerate: false         # regenerate data
+regenerate: true         # regenerate data
 
-nlp_max_iter: 500
+nlp_max_iter: 100
 qp_max_iter: 100
 solver_mode: 'BALANCE'    # HPIPM mode, can be --> 'BALANCE', 'ROBUST', 'SPEED', 'SPEED_ABS'
-alpha: 2
+alpha: 20
 conv_tol: 1e-3            # convergence tolerance for the task
 
 min_negative_jump: 0
 traj_err_threshold: 1e-3
 bounds_tolerance: 5e-4
 
-lm_reg: 2e-2
+lm_reg: 7e-3
 
 # Naive Controller
 naive:
@@ -64,7 +64,14 @@ parallel_limited:
   T: 0.175
   ws_r: 1e4
   ws_t: 1e4
-  n_cores: 8
+  n_cores: 4
+
+parallel_single:
+  dt: 5e-3
+  T: 0.175
+  ws_r: 1e4
+  ws_t: 1e4
+  soft: false
 
 parallel_receding:
   dt: 5e-3

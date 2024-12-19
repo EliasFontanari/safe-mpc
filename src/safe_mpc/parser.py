@@ -81,7 +81,7 @@ class Parameters:
         self.conv_tol = float(controller['conv_tol'])
         #self.globalization = 'MERIT_BACKTRACKING' #'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
         self.globalization = 'FIXED_STEP' if rti else 'MERIT_BACKTRACKING'
-        self.tol = 1e-5
+        self.tol = 1e-6
 
         self.dt = float(controller[cont_type]['dt'])
         self.T = float(controller[cont_type]['T'])
@@ -97,16 +97,11 @@ class Parameters:
             self.ws_t = float(controller[cont_type]['ws_t'])
             if 'receding' in cont_type:
                 self.ws_r = float(controller[cont_type]['ws_r'])
-            if cont_type == 'parallel2':
-                self.ws_r = float(controller[cont_type]['ws_r'])
-            if cont_type == 'parallel':
-                self.ws_r = float(controller[cont_type]['ws_r'])
-            if cont_type == 'parallel_receding':
+            if 'parallel' in cont_type:
                 self.ws_r = float(controller[cont_type]['ws_r'])
             if cont_type == 'parallel_limited':
-                self.ws_r = float(controller[cont_type]['ws_r'])
                 self.n_cores = int(controller[cont_type]['n_cores'])
-            if cont_type == 'receding_single':
+            if cont_type == 'receding_single' or cont_type == 'parallel_single':
                 self.soft = bool(controller[cont_type]['soft'])
 
         if cont_type == 'abort':

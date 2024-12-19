@@ -116,6 +116,7 @@ class AbstractModel:
                                       name=self.amodel.name + '_model',
                                       build_dir=self.params.GEN_DIR + 'nn_' + self.amodel.name)
         self.nn_model = self.l4c_model(state) * (100 - self.p) / 100 - vel_norm
+        print(f"\n\n\n\n\n alpha = {self.p} \n\n\n\n\n")
         self.nn_func = Function('nn_func', [self.x, self.p], [self.nn_model])
 
 
@@ -128,7 +129,7 @@ class SimDynamics:
         sim.solver_options.T = self.params.dt_s
         sim.solver_options.integrator_type = self.params.integrator_type
         sim.solver_options.num_stages = self.params.num_stages
-        sim.parameter_values = np.array([0.])
+        sim.parameter_values = np.array([self.params.alpha])
         gen_name = self.params.GEN_DIR + '/sim_' + sim.model.name
         sim.code_export_directory = gen_name
         self.sim=sim
@@ -197,7 +198,7 @@ class AbstractController:
         self.ocp.cost.yref = np.zeros(self.model.ny)
         self.ocp.cost.yref_e = np.zeros(self.model.nx)
         # Set alpha to zero as default
-        self.ocp.parameter_values = np.array([0.])
+        self.ocp.parameter_values = np.array([self.params.alpha])
 
         # Constraints
         self.ocp.constraints.lbx_0 = self.model.x_min
@@ -348,7 +349,7 @@ class AbstractController:
             #self.guessCorrection()
             self.x_guess = np.roll(self.x_guess, -1, axis=0)
             self.u_guess = np.roll(self.u_guess, -1, axis=0)
-            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if 'receding' in self.params.cont_type or 'parallel' in self.params.cont_type:
                 self.x_guess[-1] = self.simulator.simulate(self.x_guess[-2],self.u_guess[-2])
         else:
             u = self.u_temp[0]
@@ -357,11 +358,11 @@ class AbstractController:
             # Save the current temporary solution
             self.x_guess = np.roll(self.x_temp, -1, axis=0)
             self.u_guess = np.roll(self.u_temp, -1, axis=0)
-            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if 'receding' in self.params.cont_type or 'parallel' in self.params.cont_type:
                 self.guessCorrection()
                       
         # Copy the last values        
-        if not('receding' in self.params.cont_type)  and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
+        if not('receding' in self.params.cont_type)  and not('parallel' in self.params.cont_type):
             self.x_guess[-1] = np.copy(self.x_guess[-2])
         self.u_guess[-1] = np.copy(self.u_guess[-2])
         return u
@@ -426,9 +427,9 @@ class AbstractControllerSingle:
         self.ocp.solver_options.tf = self.params.T
         self.ocp.dims.N = self.N
         
-        self.model = deepcopy(self.simulator.model)
-        # Model
-        self.ocp.model = deepcopy(self.simulator.model.amodel)
+        # self.model = deepcopy(self.simulator.model)
+        # # Model
+        self.ocp.model = deepcopy(self.model.amodel)
 
         # Cost
         self.Q = 1e-4 * np.eye(self.model.nx)
@@ -450,7 +451,7 @@ class AbstractControllerSingle:
         self.ocp.cost.yref = np.zeros(self.model.ny)
         self.ocp.cost.yref_e = np.zeros(self.model.nx)
         # Set alpha to zero as default
-        self.ocp.parameter_values = np.array([0.])
+        self.ocp.parameter_values = np.array([self.params.alpha])
 
         # Constraints
         self.ocp.constraints.lbx_0 = self.model.x_min
@@ -475,13 +476,15 @@ class AbstractControllerSingle:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
-        self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
-        #self.ocp.solver_options.tol=self.params.tol
+        if self.params.rti:
+            self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+        self.ocp.solver_options.tol=self.params.tol
 
         self.gen_name = self.params.GEN_DIR + 'ocp_' + self.ocp_name + str(0) + '_' + self.model.amodel.name
         self.ocp.code_export_directory = self.gen_name
         solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json', generate=self.params.regenerate,build=self.params.regenerate)
         self.solvers.append(solver)
+
         for j in range(1,self.N-1):        
             N_list = [j,1,self.N-j-1] 
             self.model = deepcopy(self.simulator.model)
@@ -494,6 +497,7 @@ class AbstractControllerSingle:
             for i in range(len(N_list)):
                 self.assign_problem(phases[i],i,N_list[i])
                 self.ocp.set_phase(phases[i],i)
+            
             self.ocp.solver_options.model_external_shared_lib_dir = self.model.l4c_model.shared_lib_dir
             self.ocp.solver_options.model_external_shared_lib_name = self.model.l4c_model.name
             # Solver options
@@ -503,8 +507,9 @@ class AbstractControllerSingle:
             self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
             self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
             self.ocp.solver_options.globalization = self.params.globalization
-            self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
-            #self.ocp.solver_options.tol=self.params.tol
+            if self.params.rti:
+                self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+            self.ocp.solver_options.tol=self.params.tol
 
 
             
@@ -512,6 +517,7 @@ class AbstractControllerSingle:
             self.ocp.code_export_directory = self.gen_name
             solver = AcadosOcpSolver(self.ocp, json_file=self.gen_name + '.json',generate=self.params.regenerate, build=self.params.regenerate)
             self.solvers.append(solver)
+        # before the last controller
         j=j+1
         N_list = [j,1] 
         self.model = deepcopy(self.simulator.model)
@@ -527,10 +533,6 @@ class AbstractControllerSingle:
             phase_ocp.model = deepcopy(self.model.amodel)
             #phase_ocp.p_global=0
 
-            # Cost
-            self.Q = 1e-4 * np.eye(self.model.nx)
-            self.Q[0, 0] = 5e2
-            self.R = 1e-4 * np.eye(self.model.nu)
 
             phase_ocp.cost.W = lin.block_diag(self.Q, self.R)
 
@@ -543,7 +545,7 @@ class AbstractControllerSingle:
 
             phase_ocp.cost.yref = np.zeros(self.model.ny)
             # Set alpha to zero as default
-            phase_ocp.parameter_values = np.array([0.])
+            phase_ocp.parameter_values = np.array([self.params.alpha])
             #phase_ocp.p_global_values = np.array([0.])
 
             # Constraints
@@ -565,11 +567,12 @@ class AbstractControllerSingle:
                 phase_ocp.constraints.lh = np.array([0.])
                 phase_ocp.constraints.uh = np.array([1e6])
                 
-                phase_ocp.constraints.idxsh = np.array([0])
-                phase_ocp.cost.zl = np.ones((1,))*self.params.ws_r
-                phase_ocp.cost.zu = np.zeros((1,))
-                phase_ocp.cost.Zl = np.zeros((1,))
-                phase_ocp.cost.Zu = np.zeros((1,))
+                if self.params.soft == True:
+                    phase_ocp.constraints.idxsh = np.array([0])
+                    phase_ocp.cost.zl = np.ones((1,))*self.params.ws_r
+                    phase_ocp.cost.zu = np.zeros((1,))
+                    phase_ocp.cost.Zl = np.zeros((1,))
+                    phase_ocp.cost.Zu = np.zeros((1,))
 
        
                 phase_ocp.cost.W_e = self.Q
@@ -609,8 +612,9 @@ class AbstractControllerSingle:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
-        self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
-        #self.ocp.solver_options.tol=self.params.tol
+        if self.params.rti:
+            self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+        self.ocp.solver_options.tol=self.params.tol
 
 
         
@@ -620,6 +624,7 @@ class AbstractControllerSingle:
         self.solvers.append(solver)
 
         self.model = self.simulator.model
+
         # Last solver: common terminal constraint
         self.ocp = AcadosOcp()
 
@@ -629,11 +634,6 @@ class AbstractControllerSingle:
 
         # Model
         self.ocp.model = self.model.amodel
-
-        # Cost
-        self.Q = 1e-4 * np.eye(self.model.nx)
-        self.Q[0, 0] = 5e2
-        self.R = 1e-4 * np.eye(self.model.nu)
 
         self.ocp.cost.W = lin.block_diag(self.Q, self.R)
         self.ocp.cost.W_e = self.Q
@@ -650,7 +650,7 @@ class AbstractControllerSingle:
         self.ocp.cost.yref = np.zeros(self.model.ny)
         self.ocp.cost.yref_e = np.zeros(self.model.nx)
         # Set alpha to zero as default
-        self.ocp.parameter_values = np.array([0.])
+        self.ocp.parameter_values = np.array([self.params.alpha])
 
         # Constraints
         self.ocp.constraints.lbx_0 = self.model.x_min
@@ -675,8 +675,9 @@ class AbstractControllerSingle:
         self.ocp.solver_options.nlp_solver_max_iter = self.params.nlp_max_iter
         self.ocp.solver_options.qp_solver_iter_max = self.params.qp_max_iter
         self.ocp.solver_options.globalization = self.params.globalization
-        self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
-        #self.ocp.solver_options.tol=self.params.tol
+        if self.params.rti:
+            self.ocp.solver_options.levenberg_marquardt = self.params.lm_reg
+        self.ocp.solver_options.tol=self.params.tol
         # Terminal constraint
         self.model.setNNmodel()
         self.model.amodel.con_h_expr_e = self.model.nn_model
@@ -738,7 +739,7 @@ class AbstractControllerSingle:
 
         phase_ocp.cost.yref = np.zeros(self.model.ny)
         # Set alpha to zero as default
-        phase_ocp.parameter_values = np.array([0.])
+        phase_ocp.parameter_values = np.array([self.params.alpha])
         #phase_ocp.p_global_values = np.array([0.])
 
         # Constraints
@@ -852,7 +853,7 @@ class AbstractControllerSingle:
             #self.guessCorrection()
             self.x_guess = np.roll(self.x_guess, -1, axis=0)
             self.u_guess = np.roll(self.u_guess, -1, axis=0)
-            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if 'receding' in self.params.cont_type or 'parallel' in self.params.cont_type:
                 self.x_guess[-1] = self.simulator.simulate(self.x_guess[-2],self.u_guess[-2])
         else:
             u = self.u_temp[0]
@@ -861,11 +862,11 @@ class AbstractControllerSingle:
             # Save the current temporary solution
             self.x_guess = np.roll(self.x_temp, -1, axis=0)
             self.u_guess = np.roll(self.u_temp, -1, axis=0)
-            if 'receding' in self.params.cont_type or self.params.cont_type== 'parallel2' or self.params.cont_type== 'parallel_limited':
+            if 'receding' in self.params.cont_type or 'parallel' in self.params.cont_type:
                 self.guessCorrection()
                       
         # Copy the last values        
-        if not('receding' in self.params.cont_type)  and self.params.cont_type != 'parallel2' and self.params.cont_type != 'parallel_limited':
+        if not('receding' in self.params.cont_type)  and  not('parallel' in self.params.cont_type):
             self.x_guess[-1] = np.copy(self.x_guess[-2])
         self.u_guess[-1] = np.copy(self.u_guess[-2])
         return u

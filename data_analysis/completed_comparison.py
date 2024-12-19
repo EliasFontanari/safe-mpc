@@ -63,7 +63,7 @@ if __name__ == '__main__':
                              'abort': 'SafeBackupController'}
     
     conf = Parameters('triple_pendulum', 'naive')
-    ALPHA = [2,10,15]
+    ALPHA = [10,15,20]
     length_1 = [[] for _ in range(len(ALPHA))]
     length_2 = [[] for _ in range(len(ALPHA))]
     costs_1 = [[] for _ in range(len(ALPHA))]

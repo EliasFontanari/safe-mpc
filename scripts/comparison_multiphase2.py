@@ -53,12 +53,8 @@ def simulate_mpc(x0_g,x_guess,u_guess,controller):
         #print(k)
         u[k] = controller.step(x_sim[k])
         if k==72:
-            pass     
-        if not('parallel' in  controller.params.cont_type):   
-            stats.append(controller.getTime())
-        else:
-            for l in range(len(controller.times)):
-                stats.append(controller.times[l])
+            pass        
+        stats.extend(controller.getTime())
         x_sim[k+1]=simulator.simulate(x_sim[k], u[k])
         
         x_simu.append(x_sim[k + 1])
@@ -103,28 +99,25 @@ if __name__ == '__main__':
     
     # Define the configuration object, model, simulator and controller
     #conf = Parameters('triple_pendulum', 'receding',rti=True)
-    controller1='parallel_single'
-    controller2 = 'parallel'
-    conf = Parameters('triple_pendulum', controller1,rti=True) 
+    conf = Parameters('triple_pendulum', 'receding_single',rti=True) 
     #conf.cont_type = 'receding2'
     model = getattr(models,'TriplePendulumModel')(conf)
     #gc = GravityCompensation(conf, model)
     simulator = SimDynamics(model)
     #simulator_m = SimDynamics(model)
-    controller_m = getattr(controllers, available_controllers[controller1])(simulator)
+    controller_m = getattr(controllers, available_controllers['receding_single'])(simulator)
     
-    controller_r = getattr(controllers, available_controllers[controller2])(simulator)
+    controller_r = getattr(controllers, available_controllers['receding'])(simulator)
     controller_r.setReference(model.x_ref)
     controller_m.setReference(model.x_ref)
-    
 
-    data_name = conf.DATA_DIR + controller2 + '_'
+    data_name = conf.DATA_DIR + 'receding' + '_'
 
     x0_vec = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
     x_guess_vec = np.load(data_name + f'x_guess_{conf.alpha}.npy')
     u_guess_vec = np.load(data_name + f'u_guess_{conf.alpha}.npy')
 
-    data_name = conf.DATA_DIR + controller2 + '_'
+    data_name = conf.DATA_DIR + 'receding_single' + '_'
     x0_vec_m = np.load(conf.DATA_DIR + f'x_init_{conf.alpha}.npy')
     x_guess_vec_m = np.load(data_name + f'x_guess_{conf.alpha}.npy')
     u_guess_vec_m = np.load(data_name + f'u_guess_{conf.alpha}.npy')
@@ -137,29 +130,29 @@ if __name__ == '__main__':
 
     res_r, res_m = [],[]
     r_succ, m_succ=0,0
-    for i in range(1,len(x0_vec)):
+    for i in range(0,len(x0_vec)):
         print(i)
-        #prob = np.random.randint(0,len(x0_vec))
+        prob = np.random.randint(0,len(x0_vec))
         prob=i
         #prob = 294
-        controller_r.setGuess(x_guess_vec[prob],u_guess_vec[prob])
+        # controller_r.setGuess(x_guess_vec[prob],u_guess_vec[prob])
         res_r.append(simulate_mpc(x0_vec[prob],x_guess_vec[prob],u_guess_vec[prob],controller_r))
-        controller_m.setGuess(x_guess_vec[prob],u_guess_vec[prob])
+        #controller_m.setGuess(x_guess_vec[prob],u_guess_vec[prob])
         res_m.append(simulate_mpc(x0_vec_m[prob],x_guess_vec_m[prob],u_guess_vec_m[prob],controller_m))
-        if res_r[-1][1]==1:
+        if res_r[i][1]==1:
             r_succ+=1
-        if res_m[-1][1]==1:
+        if res_m[i][1]==1:
             m_succ+=1
-        if True:
+        if False:
             plt.figure(f'Receding trajectory {prob}')
             plt.clf()
-            plt.plot(np.array(res_r[-1][2])[:,0], '-')
-            plt.plot(np.array(res_r[-1][2])[:,1], '-')
-            plt.plot(np.array(res_r[-1][2])[:,2], '-')
-            plt.plot(np.array(res_r[-1][2])[:,3], '-')
-            plt.plot(np.array(res_r[-1][2])[:,4], '-')
-            plt.plot(np.array(res_r[-1][2])[:,5], '-')
-            plt.plot(np.array(res_r[-1][9]))
+            plt.plot(np.array(res_r[i][2])[:,0], '-')
+            plt.plot(np.array(res_r[i][2])[:,1], '-')
+            plt.plot(np.array(res_r[i][2])[:,2], '-')
+            plt.plot(np.array(res_r[i][2])[:,3], '-')
+            plt.plot(np.array(res_r[i][2])[:,4], '-')
+            plt.plot(np.array(res_r[i][2])[:,5], '-')
+            plt.plot(np.array(res_r[i][9]))
             plt.xlabel('t')
             plt.legend(['x1','x2','x3','dx1','dx2','dx3'])
             plt.grid()
@@ -167,13 +160,13 @@ if __name__ == '__main__':
             # plt.axhline(y=controller.model.u_max[0], color='r', linestyle='-')
             plt.figure(f'Receding_single trajectory {prob}')
             plt.clf()
-            plt.plot(np.array(res_m[-1][2])[:,0], '-')
-            plt.plot(np.array(res_m[-1][2])[:,1], '-')
-            plt.plot(np.array(res_m[-1][2])[:,2], '-')
-            plt.plot(np.array(res_m[-1][2])[:,3], '-')
-            plt.plot(np.array(res_m[-1][2])[:,4], '-')
-            plt.plot(np.array(res_m[-1][2])[:,5], '-')
-            plt.plot(np.array(res_m[-1][9]))
+            plt.plot(np.array(res_m[i][2])[:,0], '-')
+            plt.plot(np.array(res_m[i][2])[:,1], '-')
+            plt.plot(np.array(res_m[i][2])[:,2], '-')
+            plt.plot(np.array(res_m[i][2])[:,3], '-')
+            plt.plot(np.array(res_m[i][2])[:,4], '-')
+            plt.plot(np.array(res_m[i][2])[:,5], '-')
+            plt.plot(np.array(res_m[i][9]))
             plt.xlabel('t')
             plt.legend(['x1','x2','x3','dx1','dx2','dx3'])
             plt.grid()
@@ -182,15 +175,15 @@ if __name__ == '__main__':
     print(f'receding: {r_succ}/{len(x0_vec)}, receding_single: {m_succ}/{len(x0_vec)}')
     
     _, _, _, t_stats, _, _,_,_,_,_,_ = zip(*res_r)
-    print('99% quantile computation time:')
+    print('99% quantile computation time receding:')
     times = np.array([t for arr in t_stats for t in arr])
-    for field, t in zip(controller_r.time_fields, np.quantile(times, 0.99, axis=0)):
+    for field, t in zip(controller_r.time_fields, np.quantile(times, 0.99, axis=0,method='closest_observation')):
         print(f"{field:<20} -> {t}")
     
     _, _, _, t_stats, _, _,_,_,_,_,_ = zip(*res_m)
     print('99% quantile computation time receding_single:')
     times = np.array([t for arr in t_stats for t in arr])
-    for field, t in zip(controller_m.time_fields, np.quantile(times, 0.99, axis=0)):
+    for field, t in zip(controller_m.time_fields, np.quantile(times, 0.99, axis=0,method='closest_observation')):
         print(f"{field:<20} -> {t}")
     #rr = np.random.randint(1,controller.N+1)
     #rr=34

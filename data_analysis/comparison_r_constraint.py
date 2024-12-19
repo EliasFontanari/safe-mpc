@@ -12,7 +12,7 @@ from acados_template import AcadosOcpSolver
 from datetime import datetime
 from scipy.stats import qmc
 import matplotlib.pyplot as plt
-import safe_mpc.plut as plut
+#import safe_mpc.plut as plut
 
 def load_data(control,alpha,min_negative_jump,err_thr,mode=None,cores=None):
     control = available_controllers[control]
