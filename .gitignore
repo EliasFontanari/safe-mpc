@@ -4,6 +4,7 @@
 *.png
 *.pdf
 *.zip
+*.json
 generated/*
 nn_models/*
 data/*
@@ -23,3 +24,5 @@ src/safe_mpc/plut.py
 data (copy)/*
 data (another copy)/*
 data22/*
+**/_l4c_generated/
+**/__pycache__/
