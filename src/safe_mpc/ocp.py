@@ -102,7 +102,6 @@ class NaiveOCP:
             'ipopt.hessian_approximation': 'limited-memory',
             # 'detect_simple_bounds': 'yes',
             'ipopt.max_iter': self.params.nlp_max_iter,
-            'ipopt.linear_solver': 'ma57',
             'ipopt.sb': 'yes'
         }
 

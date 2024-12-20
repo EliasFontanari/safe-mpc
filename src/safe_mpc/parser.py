@@ -33,7 +33,7 @@ class Parameters:
         self.DATA_DIR = os.path.join(self.ROOT_DIR, 'data/')
         self.GEN_DIR = os.path.join(self.ROOT_DIR, 'generated/')
         self.NN_DIR = os.path.join(self.ROOT_DIR, 'nn_models/' + urdf_name + '/')
-        self.ROBOTS_DIR = os.path.join(self.ROOT_DIR, 'robots/')
+        self.ROBOTS_DIR = os.path.join(self.ROOT_DIR, 'example-robot-data/')
         # temp solution
         if urdf_name == 'ur5':
             self.robot_urdf = f'{self.ROBOTS_DIR}/ur_description/urdf/{urdf_name}_robot.urdf'
@@ -45,7 +45,7 @@ class Parameters:
         self.test_num = int(parameters['test_num'])
         self.n_steps = int(parameters['n_steps'])
         self.cpu_num = int(parameters['cpu_num'])
-        self.build = False
+        self.build = True
         
         self.N = int(parameters['N'])
         self.dt = float(parameters['dt'])
@@ -78,7 +78,12 @@ class Parameters:
         # For cartesian constraint
         self.obs_flag = bool(parameters['obs_flag'])
         self.abort_flag = bool(parameters['abort_flag'])
-        self.frame_name = 'gripperMover'       #  TODO: dependence on the robot
+        if urdf_name == 'z1':
+            self.frame_name = 'gripperMover'       #  TODO: dependence on the robot
+        elif 'ur' in urdf_name:
+            self.frame_name = 'ee_link'
+        elif urdf_name == 'fr3':
+            self.frame_name = 'fr3_hand'
 
         self.box_lb = np.array([0.45, -0.55, 0.])
         self.box_ub = np.array([0.75, -0.25, 0.3])

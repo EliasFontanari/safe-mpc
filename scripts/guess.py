@@ -15,7 +15,7 @@ params.act = args['activation']
 if model_name == 'triple_pendulum':
     model = TriplePendulumModel(params)
 else:
-    model = AdamModel(params, n_dofs=4)
+    model = AdamModel(params, n_dofs=7)
     model.ee_ref = ee_ref
 
 ocp_name = args['controller']
